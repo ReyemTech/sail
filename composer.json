@@ -1,16 +1,27 @@
 {
-    "name": "laravel/sail",
+    "name": "reyemtech/sail",
     "description": "Docker files for running a basic Laravel application.",
-    "keywords": ["laravel", "docker"],
+    "keywords": [
+        "laravel",
+        "docker"
+    ],
     "license": "MIT",
     "support": {
-        "issues": "https://github.com/laravel/sail/issues",
-        "source": "https://github.com/laravel/sail"
+        "issues": "https://github.com/reyemtech/sail/issues",
+        "source": "https://github.com/reyemtech/sail"
     },
     "authors": [
         {
             "name": "Taylor Otwell",
             "email": "taylor@laravel.com"
+        },
+        {
+            "name": "ReyemTech",
+            "email": "contact@reyem.tech"
+        },
+        {
+            "name": "Mario Meyer",
+            "email": "mario@reyem.tech"
         }
     ],
     "require": {
@@ -18,6 +29,7 @@
         "illuminate/console": "^9.52.16|^10.0|^11.0|^12.0",
         "illuminate/contracts": "^9.52.16|^10.0|^11.0|^12.0",
         "illuminate/support": "^9.52.16|^10.0|^11.0|^12.0",
+        "mirazmac/dotenvwriter": "^0.5.0",
         "symfony/console": "^6.0|^7.0",
         "symfony/yaml": "^6.0|^7.0"
     },
@@ -25,8 +37,12 @@
         "orchestra/testbench": "^7.0|^8.0|^9.0|^10.0",
         "phpstan/phpstan": "^2.0"
     },
+    "conflict": {
+        "laravel/sail": "*"
+    },
     "bin": [
-        "bin/sail"
+        "bin/sail",
+        "bin/sail-setup"
     ],
     "autoload": {
         "psr-4": {
@@ -42,6 +58,11 @@
     },
     "config": {
         "sort-packages": true
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "@php artisan vendor:publish --provider=\"Laravel\\Sail\\SailServiceProvider\" --tag=config"
+        ]
     },
     "minimum-stability": "dev",
     "prefer-stable": true
