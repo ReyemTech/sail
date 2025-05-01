@@ -2,6 +2,7 @@
 
 namespace Laravel\Sail\Console\Concerns;
 
+use MirazMac\DotEnv\Writer;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
@@ -33,7 +34,7 @@ trait InteractsWithDockerComposeServices
      *
      * @var string[]
      */
-    protected $defaultServices = ['mysql', 'redis', 'selenium', 'mailpit'];
+    protected $defaultServices = ['mysql', 'redis', 'minio', 'mailpit'];
 
     /**
      * Gather the desired Sail services using an interactive prompt.
@@ -42,15 +43,106 @@ trait InteractsWithDockerComposeServices
      */
     protected function gatherServicesInteractively()
     {
+        $services = array_unique(array_merge($this->defaultServices, $this->services));
+
+        sort($services);
         if (function_exists('\Laravel\Prompts\multiselect')) {
             return \Laravel\Prompts\multiselect(
                 label: 'Which services would you like to install?',
-                options: $this->services,
-                default: ['mysql'],
+                options: $services,
+                default: $this->defaultServices,
+                scroll: sizeof($services) > 20 ? 15 : sizeof($services),
             );
         }
 
-        return $this->choice('Which services would you like to install?', $this->services, 0, null, true);
+        return $this->choice('Which services would you like to install?', $services, 0, null, true);
+    }
+
+    /**
+     * Get the project name to be used for the container.
+     *
+     * @return string
+     */
+    protected function getProjectName()
+    {
+        $directoryName = basename(getcwd());
+        if (function_exists('\Laravel\Prompts\text')) {
+            return \Laravel\Prompts\text(
+                label: 'What is the name of the Project?',
+                default: $directoryName,
+                required: true,
+            );
+        }
+        return $this->ask(
+            'What is the name of the Project?',
+            $directoryName
+        );
+    }
+
+    /**
+     * Get the domain name to be used for the container.
+     *
+     * @param  string  $project
+     * @return string
+     */
+    protected function getDomainName($project)
+    {
+        if (function_exists('\Laravel\Prompts\text')) {
+            return \Laravel\Prompts\text(
+                label: 'What domain should be used for the container?',
+                default: $project . '.test',
+                required: true,
+            );
+        }
+        return $this->ask(
+            'What domain should be used for the container?',
+            $project . '.test'
+        );
+    }
+
+    /**
+     * Get the IP address to be used for the container.
+     *
+     * @return string
+     */
+    protected function getIpAddress()
+    {
+        if (function_exists('\Laravel\Prompts\text')) {
+            return \Laravel\Prompts\text(
+                label: 'What IP Address should be used for the container?',
+                default: '172.20.0.10',
+                required: true,
+            );
+        }
+        return $this->ask(
+            'What IP Address should be used for the container?',
+            '172.20.0.10'
+        );
+    }
+
+    /**
+     * Write the project environment variables to the .env file.
+     *
+     * @param  string  $project
+     * @param  string  $ip
+     * @return bool
+     */
+    protected function writePorjectEnv(string $project, string $ip, string $domain): bool
+    {
+        $subnet = substr($ip, 0, strrpos($ip, '.')) . '.0/24';
+
+        $writer = new Writer(base_path('.env'));
+        $writer->set('SAIL_IP', $ip);
+        $writer->set('SAIL_SUBNET', $subnet);
+        $writer->set('SAIL_PROJECT', $project);
+        // $domain = parse_url(config('app.url'), PHP_URL_HOST);
+        $writer->set('SAIL_DOMAIN', $domain);
+        $writer->set('APP_URL', 'https://' . $domain);
+        $writer->set('WWWGROUP', '1000');
+        $writer->set('WWWUSER', '1000');
+        $writer->set('PHP_VERSION', $this->option('php'));
+
+        return $writer->write();
     }
 
     /**
@@ -59,7 +151,7 @@ trait InteractsWithDockerComposeServices
      * @param  array  $services
      * @return void
      */
-    protected function buildDockerCompose(array $services)
+    protected function buildDockerCompose(string $project = 'laravel', array $services)
     {
         $composePath = base_path('docker-compose.yml');
 
@@ -67,16 +159,18 @@ trait InteractsWithDockerComposeServices
             ? Yaml::parseFile($composePath)
             : Yaml::parse(file_get_contents(__DIR__ . '/../../../stubs/docker-compose.stub'));
 
+        $compose['name'] = $project;
+
         // Prepare the installation of the "mariadb-client" package if the MariaDB service is used...
         if (in_array('mariadb', $services)) {
-            $compose['services']['laravel.test']['build']['args']['MYSQL_CLIENT'] = 'mariadb-client';
+            $compose['services']['laravel']['build']['args']['MYSQL_CLIENT'] = 'mariadb-client';
         }
 
-        // Adds the new services as dependencies of the laravel.test service...
-        if (! array_key_exists('laravel.test', $compose['services'])) {
-            $this->warn('Couldn\'t find the laravel.test service. Make sure you add ['.implode(',', $services).'] to the depends_on config.');
+        // Adds the new services as dependencies of the laravel service...
+        if (! array_key_exists('laravel', $compose['services'])) {
+            $this->warn('Couldn\'t find the laravel service. Make sure you add [' . implode(',', $services) . '] to the depends_on config.');
         } else {
-            $compose['services']['laravel.test']['depends_on'] = collect($compose['services']['laravel.test']['depends_on'] ?? [])
+            $compose['services']['laravel']['depends_on'] = collect($compose['services']['laravel']['depends_on'] ?? [])
                 ->merge($services)
                 ->unique()
                 ->values()
@@ -119,13 +213,15 @@ trait InteractsWithDockerComposeServices
      * @param  array  $services
      * @return void
      */
-    protected function replaceEnvVariables(array $services)
+    protected function replaceEnvVariables(string $project, array $services)
     {
         $environment = file_get_contents($this->laravel->basePath('.env'));
 
-        if (in_array('mysql', $services) ||
+        if (
+            in_array('mysql', $services) ||
             in_array('mariadb', $services) ||
-            in_array('pgsql', $services)) {
+            in_array('pgsql', $services)
+        ) {
             $defaults = [
                 '# DB_HOST=127.0.0.1',
                 '# DB_PORT=3306',
@@ -141,32 +237,32 @@ trait InteractsWithDockerComposeServices
 
         if (in_array('mysql', $services)) {
             $environment = preg_replace('/DB_CONNECTION=.*/', 'DB_CONNECTION=mysql', $environment);
-            $environment = str_replace('DB_HOST=127.0.0.1', "DB_HOST=mysql", $environment);
-        }elseif (in_array('pgsql', $services)) {
+            $environment = str_replace('/DB_HOST=.*/', "DB_HOST=mysql", $environment);
+        } elseif (in_array('pgsql', $services)) {
             $environment = preg_replace('/DB_CONNECTION=.*/', 'DB_CONNECTION=pgsql', $environment);
-            $environment = str_replace('DB_HOST=127.0.0.1', "DB_HOST=pgsql", $environment);
+            $environment = str_replace('/DB_HOST=.*/', "DB_HOST=pgsql", $environment);
             $environment = str_replace('DB_PORT=3306', "DB_PORT=5432", $environment);
         } elseif (in_array('mariadb', $services)) {
             if ($this->laravel->config->has('database.connections.mariadb')) {
                 $environment = preg_replace('/DB_CONNECTION=.*/', 'DB_CONNECTION=mariadb', $environment);
             }
 
-            $environment = str_replace('DB_HOST=127.0.0.1', "DB_HOST=mariadb", $environment);
+            $environment = preg_replace('/DB_HOST=.*/', "DB_HOST=mariadb", $environment);
         }
 
-        $environment = str_replace('DB_USERNAME=root', "DB_USERNAME=sail", $environment);
+        $environment = preg_replace('/DB_USERNAME=.*/', "DB_USERNAME=sail", $environment);
         $environment = preg_replace("/DB_PASSWORD=(.*)/", "DB_PASSWORD=password", $environment);
 
         if (in_array('memcached', $services)) {
-            $environment = str_replace('MEMCACHED_HOST=127.0.0.1', 'MEMCACHED_HOST=memcached', $environment);
+            $environment = str_replace('/MEMCACHED_HOST=.*/', 'MEMCACHED_HOST=memcached', $environment);
         }
 
         if (in_array('redis', $services)) {
-            $environment = str_replace('REDIS_HOST=127.0.0.1', 'REDIS_HOST=redis', $environment);
+            $environment = str_replace('/REDIS_HOST=.*/', 'REDIS_HOST=redis', $environment);
         }
 
-        if (in_array('valkey',$services)){
-            $environment = str_replace('REDIS_HOST=127.0.0.1', 'REDIS_HOST=valkey', $environment);
+        if (in_array('valkey', $services)) {
+            $environment = str_replace('/REDIS_HOST=.*/', 'REDIS_HOST=valkey', $environment);
         }
 
         if (in_array('mongodb', $services)) {
@@ -186,6 +282,15 @@ trait InteractsWithDockerComposeServices
             $environment .= "\nTYPESENSE_PORT=8108";
             $environment .= "\nTYPESENSE_PROTOCOL=http";
             $environment .= "\nTYPESENSE_API_KEY=xyz\n";
+        }
+
+        if (in_array('minio', $services)) {
+            $environment = preg_replace("/^AWS_ACCESS_KEY_ID=(.*)/m", "AWS_ACCESS_KEY_ID=sail", $environment);
+            $environment = preg_replace("/^AWS_SECRET_ACCESS_KEY=(.*)/m", "AWS_SECRET_ACCESS_KEY=minio123", $environment);
+            $environment = preg_replace("/^AWS_DEFAULT_REGION=(.*)/m", "AWS_DEFAULT_REGION=us-east-1", $environment);
+            $environment = preg_replace("/^AWS_BUCKET=(.*)/m", "AWS_BUCKET={$project}", $environment);
+            $environment = preg_replace("/^AWS_ENDPOINT=(.*)/m", "AWS_ENDPOINT=" . preg_replace('/^http:/', 'https:', config('app.url')) . ":9000", $environment);
+            $environment = preg_replace("/^AWS_USE_PATH_STYLE_ENDPOINT=(.*)/m", "AWS_USE_PATH_STYLE_ENDPOINT=true", $environment);
         }
 
         if (in_array('soketi', $services)) {
@@ -251,7 +356,7 @@ trait InteractsWithDockerComposeServices
 
         file_put_contents(
             $this->laravel->basePath('.devcontainer/devcontainer.json'),
-            file_get_contents(__DIR__.'/../../../stubs/devcontainer.stub')
+            file_get_contents(__DIR__ . '/../../../stubs/devcontainer.stub')
         );
 
         $environment = file_get_contents($this->laravel->basePath('.env'));
@@ -270,6 +375,8 @@ trait InteractsWithDockerComposeServices
      */
     protected function prepareInstallation($services)
     {
+        $this->runSetup();
+
         // Ensure docker is installed...
         if ($this->runCommands(['docker info > /dev/null 2>&1']) !== 0) {
             return;
@@ -277,12 +384,24 @@ trait InteractsWithDockerComposeServices
 
         if (count($services) > 0) {
             $this->runCommands([
-                './vendor/bin/sail pull '.implode(' ', $services),
+                './vendor/bin/sail pull ' . implode(' ', $services),
             ]);
         }
 
         $this->runCommands([
             './vendor/bin/sail build',
+        ]);
+    }
+
+    /**
+     * Run the setup command.
+     *
+     * @return string
+     */
+    protected function runSetup()
+    {
+        $this->runCommands([
+            './vendor/bin/sail-setup',
         ]);
     }
 
@@ -300,12 +419,12 @@ trait InteractsWithDockerComposeServices
             try {
                 $process->setTty(true);
             } catch (\RuntimeException $e) {
-                $this->output->writeln('  <bg=yellow;fg=black> WARN </> '.$e->getMessage().PHP_EOL);
+                $this->output->writeln('  <bg=yellow;fg=black> WARN </> ' . $e->getMessage() . PHP_EOL);
             }
         }
 
         return $process->run(function ($type, $line) {
-            $this->output->write('    '.$line);
+            $this->output->write('    ' . $line);
         });
     }
 }

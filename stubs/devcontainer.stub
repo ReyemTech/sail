@@ -4,8 +4,8 @@
 	"dockerComposeFile": [
 		"../docker-compose.yml"
 	],
-	"service": "laravel.test",
-	"workspaceFolder": "/var/www/html",
+	"service": "laravel",
+	"workspaceFolder": "/var/www",
 	"customizations": {
 		"vscode": {
 			"extensions": [
