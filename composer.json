@@ -51,6 +51,11 @@
             "Laravel\\Sail\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Laravel\\Sail\\Tests\\": "tests/"
+        }
+    },
     "extra": {
         "laravel": {
             "providers": [
@@ -63,13 +68,22 @@
     },
     "scripts": {
         "post-autoload-dump": [
-            "@php artisan vendor:publish --provider=\"Laravel\\Sail\\SailServiceProvider\" --tag=config"
+            "@php -r \"if (file_exists('artisan')) { passthru('php artisan vendor:publish --provider=\\\"Laravel\\\\Sail\\\\SailServiceProvider\\\" --tag=config'); }\""
         ],
         "post-install-cmd": [
             "@php -r \"if (file_exists('vendor/reyemtech/sail/bin/install-sail-wrapper')) { passthru('bash vendor/reyemtech/sail/bin/install-sail-wrapper'); }\""
         ],
         "post-update-cmd": [
             "@php -r \"if (file_exists('vendor/reyemtech/sail/bin/install-sail-wrapper')) { passthru('bash vendor/reyemtech/sail/bin/install-sail-wrapper'); }\""
+        ],
+        "test": [
+            "phpunit"
+        ],
+        "test:feature": [
+            "phpunit tests/Feature"
+        ],
+        "test:integration": [
+            "phpunit tests/Integration"
         ]
     },
     "minimum-stability": "dev",
