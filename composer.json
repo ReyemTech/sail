@@ -42,7 +42,9 @@
     },
     "bin": [
         "bin/sail",
-        "bin/sail-setup"
+        "bin/sail-setup",
+        "bin/sail-wrapper",
+        "bin/install-sail-wrapper"
     ],
     "autoload": {
         "psr-4": {
@@ -62,6 +64,12 @@
     "scripts": {
         "post-autoload-dump": [
             "@php artisan vendor:publish --provider=\"Laravel\\Sail\\SailServiceProvider\" --tag=config"
+        ],
+        "post-install-cmd": [
+            "@php -r \"if (file_exists('vendor/reyemtech/sail/bin/install-sail-wrapper')) { passthru('bash vendor/reyemtech/sail/bin/install-sail-wrapper'); }\""
+        ],
+        "post-update-cmd": [
+            "@php -r \"if (file_exists('vendor/reyemtech/sail/bin/install-sail-wrapper')) { passthru('bash vendor/reyemtech/sail/bin/install-sail-wrapper'); }\""
         ]
     },
     "minimum-stability": "dev",
