@@ -1,5 +1,29 @@
 # Release Notes
 
+## [2.1.0](https://github.com/ReyemTech/sail/compare/v2.0.0...v2.1.0) (2026-04-13)
+
+
+### Features
+
+* add Laravel Nightwatch agent sidecar support ([163fa2c](https://github.com/ReyemTech/sail/commit/163fa2c862a1e53367a1631131fa4c41e72b32b6))
+* **helm:** add Redis Sentinel env vars to chart ([2fcde98](https://github.com/ReyemTech/sail/commit/2fcde98e3d193076bb08bde0a5162dc77d058fd4))
+* **helm:** add s3.url support for AWS_URL env var ([b95c7fc](https://github.com/ReyemTech/sail/commit/b95c7fc2450ee6d71c27b8c7fba76e8dced95a70))
+* **helm:** add Typesense subchart and infrastructure secret mapping ([9f5dd5c](https://github.com/ReyemTech/sail/commit/9f5dd5c95fc90a9a6bb61c9c6fd8bd850ff7841e))
+
+
+### Bug Fixes
+
+* **helm:** add database.secret env mapping to presync-migrate stub ([f5e12ba](https://github.com/ReyemTech/sail/commit/f5e12badf92473ac58447a5cae8b9c760cf4995d))
+* **helm:** remove typesense envFrom from presync-migrate stub ([e7685be](https://github.com/ReyemTech/sail/commit/e7685be216726dcd4ab9728014ffd866017d5971))
+* **helm:** use appname-typesense default in presync and scheduler stubs ([70c5907](https://github.com/ReyemTech/sail/commit/70c5907738191fd0aa971dd709b09bd7a89e410b))
+* use TCP liveness probe for nightwatch agent sidecar ([457fc6a](https://github.com/ReyemTech/sail/commit/457fc6aa6e7792d2802b8249815bac87578c7ba1))
+
+
+### Miscellaneous Chores
+
+* auto-assign PRs from release-please ([0d3fd04](https://github.com/ReyemTech/sail/commit/0d3fd04474de8f879a5e8f539d4c780cfaca3942))
+* merge upstream laravel/sail (v1.52.0–v1.54.0) ([f911912](https://github.com/ReyemTech/sail/commit/f911912689cc083661b3b35fa3d5da1f516b46d0))
+
 ## [2.0.0](https://github.com/reyemtech/sail/compare/v1.51.1...v2.0.0) (2026-03-17)
 
 
