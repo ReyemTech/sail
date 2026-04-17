@@ -1,5 +1,70 @@
 # Release Notes
 
+## [3.0.0](https://github.com/ReyemTech/sail/compare/v2.0.0...v3.0.0) (2026-04-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* SAIL_BUILD_REMOVE_VENDOR_NODE_MODULES env var renamed to SAIL_BUILD_REMOVE_NODE_MODULES. --remove-vendor-node-modules CLI flag renamed to --remove-node-modules.
+* REMOVE_VENDOR_NODE_MODULES renamed to REMOVE_NODE_MODULES
+
+### Features
+
+* add ArgoCD PreSync hook to verify images before deployment ([ce5eebf](https://github.com/ReyemTech/sail/commit/ce5eebff03577efefb552a65962ce6a65d3030aa))
+* add Laravel Nightwatch agent sidecar support ([69722a7](https://github.com/ReyemTech/sail/commit/69722a7c3aa5fc50f665a2d934900d9dddae1345))
+* add presync migration Job template ([8ac4885](https://github.com/ReyemTech/sail/commit/8ac48854d56b7054ff1300be7cbb642291cba860))
+* Allow Laravel Sail to run Pest 4 Browser tests ([#812](https://github.com/ReyemTech/sail/issues/812)) ([019a293](https://github.com/ReyemTech/sail/commit/019a2933ff4a9199f098d4259713f9bc266a874e))
+* default vendorPvc disabled, add migrations and imageCheck config ([a120977](https://github.com/ReyemTech/sail/commit/a120977b6a857e811045a424f911c83caa41e589))
+* gate image check presync Job on imageCheck.enabled config ([9f34196](https://github.com/ReyemTech/sail/commit/9f341969cde842ff67793546af9551dea33e7965))
+* **helm:** add Redis Sentinel env vars to chart ([4a0b1b9](https://github.com/ReyemTech/sail/commit/4a0b1b99b30b897c72885ea713ded848d7dfe37f))
+* **helm:** add s3.url support for AWS_URL env var ([d429599](https://github.com/ReyemTech/sail/commit/d429599fb43c963ad6505ac70dd098da53964d9b))
+* **helm:** add Typesense subchart and infrastructure secret mapping ([e29dddd](https://github.com/ReyemTech/sail/commit/e29ddddbda2e96d28d0b93d81300aa2a468edb2f))
+* keep vendor in production images, only strip node_modules ([da73396](https://github.com/ReyemTech/sail/commit/da733960e6f14ac2c3d324cf7faa0e13d926aeb9))
+* **pcov:** change pcov directory ([#670](https://github.com/ReyemTech/sail/issues/670)) ([ab4b2b8](https://github.com/ReyemTech/sail/commit/ab4b2b8292dc7b4b98c3c11084c8fc65f909f4e9))
+* remove composer install and migrate from production s6 startup ([004eb75](https://github.com/ReyemTech/sail/commit/004eb752da179a67bbbea8f0161f83f10e3d6c21))
+* replace mailhog with mailpit ([#533](https://github.com/ReyemTech/sail/issues/533)) ([4f23063](https://github.com/ReyemTech/sail/commit/4f230634a3163f3442def6a4e6ffdb02b02e14d6))
+* resource hygiene — fix s6-log pipeline + chart defaults ([#4](https://github.com/ReyemTech/sail/issues/4)) ([2546599](https://github.com/ReyemTech/sail/commit/254659910b1d159b2af77f9ea9b7b6ddc3372d38))
+* simplify scheduler CronJob, remove composer install and PVC mount ([7ad3739](https://github.com/ReyemTech/sail/commit/7ad3739e19f7d68b5969e7a864120dee34f45e04))
+* upgrade postgresql-client to 15 ([#564](https://github.com/ReyemTech/sail/issues/564)) ([3042ff8](https://github.com/ReyemTech/sail/commit/3042ff8cf403817c340d5a7762b2d32900239f46))
+* Upgrade the Compose file format version to Compose specification ([#601](https://github.com/ReyemTech/sail/issues/601)) ([cf94fd5](https://github.com/ReyemTech/sail/commit/cf94fd5e86ebe11b9ff19dbe91f4e41f603a6cd3))
+
+
+### Bug Fixes
+
+* Allow postCreateCommand to fail silently in VS Code on Windows ([#626](https://github.com/ReyemTech/sail/issues/626)) ([8145269](https://github.com/ReyemTech/sail/commit/8145269c8b2a72f094e501f73989963f31f887f9))
+* auto-rollout Typesense when secret changes ([6431687](https://github.com/ReyemTech/sail/commit/6431687477d0b708e68f072517d477eaf53267f4))
+* Change node source repository ([#613](https://github.com/ReyemTech/sail/issues/613)) ([542fff8](https://github.com/ReyemTech/sail/commit/542fff89220c67195ac61bab4eb3cc6572c5cc0c))
+* **ci:** remove laravel/sail before linking reyemtech/sail, add PHPStan baseline ([1a119f6](https://github.com/ReyemTech/sail/commit/1a119f62a192f1fc85a6b2d2877f1efacabfd306))
+* **ci:** replace upstream Laravel workflows with fork-specific CI ([6521191](https://github.com/ReyemTech/sail/commit/6521191752067b4fb847c0c1c6b1036baccda72d))
+* define SAIL_DOCKER_BINARY before first usage in sail script ([bf01ebc](https://github.com/ReyemTech/sail/commit/bf01ebcffe7546809834f8aaf5d346fc3ae382d3))
+* fixed swoole extension that gets the SQLSTATE[08006] error ([#715](https://github.com/ReyemTech/sail/issues/715)) ([b4af38e](https://github.com/ReyemTech/sail/commit/b4af38e1ab16fe7aa729eddf5b810229f42d2ad3))
+* **helm:** add database.secret env mapping to presync-migrate stub ([a0622ff](https://github.com/ReyemTech/sail/commit/a0622ff92902e2bd918fc9b99f4912475db01f43))
+* **helm:** guard nightwatch sidecar against non-map coalescing ([b35e45b](https://github.com/ReyemTech/sail/commit/b35e45bf7f8fa6b9918b408b9cb039dd7629762d))
+* **helm:** remove typesense envFrom from presync-migrate stub ([41f9737](https://github.com/ReyemTech/sail/commit/41f973784f1bc0ef1d7065aca57e5cd4afc3388f))
+* **helm:** use appname-typesense default in presync and scheduler stubs ([309da20](https://github.com/ReyemTech/sail/commit/309da20613cc60825cac4f4f7150ee330de9d7d9))
+* missing \ in dockerfile 8.3 ([#718](https://github.com/ReyemTech/sail/issues/718)) ([0a7e289](https://github.com/ReyemTech/sail/commit/0a7e2891a85eba2d448a9ffc6fc5ce367e924bc1))
+* mount docker config for crane registry authentication ([82027c0](https://github.com/ReyemTech/sail/commit/82027c08e8062d4d6a6df0553f6eec2cca7411ca))
+* Sail share 504 timeout fix for linux hosts ([#709](https://github.com/ReyemTech/sail/issues/709)) ([f2d43f0](https://github.com/ReyemTech/sail/commit/f2d43f0c01ee00178ce3b08db67cc30d8e4dc142))
+* **sail:** Correct YAML syntax in rustfs.stub healthcheck ([#828](https://github.com/ReyemTech/sail/issues/828)) ([1bf3b88](https://github.com/ReyemTech/sail/commit/1bf3b8870b72a258a3b6b5119435835ece522e8a))
+* script not loading all app env files ([#482](https://github.com/ReyemTech/sail/issues/482)) ([4fefa0f](https://github.com/ReyemTech/sail/commit/4fefa0f2fb179ba34021ca261b28a393230b2119))
+* typesense healthcheck ([#788](https://github.com/ReyemTech/sail/issues/788)) ([e569251](https://github.com/ReyemTech/sail/commit/e5692510f1ef8e0f5096cde2b885d558f8d86592))
+* use TCP liveness probe for nightwatch agent sidecar ([c05b26d](https://github.com/ReyemTech/sail/commit/c05b26d832dfc8eaded0141a786a66748f210686))
+* Use xdg-open if open does not exist ([#744](https://github.com/ReyemTech/sail/issues/744)) ([ea7ce73](https://github.com/ReyemTech/sail/commit/ea7ce73f569c7fe339a22bf7f3197e4ae1b7cff2))
+
+
+### Miscellaneous Chores
+
+* **1.x:** release 2.0.0 ([3d71aa1](https://github.com/ReyemTech/sail/commit/3d71aa1c435fc3803f764d709604ead1ae7eab86))
+* auto-assign PRs from release-please ([3a1c0e5](https://github.com/ReyemTech/sail/commit/3a1c0e5f33d0dcff346dbf7894ac49084a0cc671))
+* Replace mysql/mysql-server:8.0 with mysql:8.4 ([#834](https://github.com/ReyemTech/sail/issues/834)) ([070c7f3](https://github.com/ReyemTech/sail/commit/070c7f34ca8dbece4350fbfe0bab580047dfacc7))
+* uncomment xdebug extension ([#837](https://github.com/ReyemTech/sail/issues/837)) ([410b38d](https://github.com/ReyemTech/sail/commit/410b38dd3ec98d5fe4861bc2ed26db3761de7253))
+* Update `update-changelog.yml` ([06b4e13](https://github.com/ReyemTech/sail/commit/06b4e13b63329540da2310f191f49b599dc935a5))
+
+
+### Code Refactoring
+
+* rename remove_vendor_node_modules to remove_node_modules ([c3268f0](https://github.com/ReyemTech/sail/commit/c3268f099fde759f4d3a5256314d58ab0212a184))
+
 ## [2.0.0](https://github.com/reyemtech/sail/compare/v1.51.1...v2.0.0) (2026-03-17)
 
 
