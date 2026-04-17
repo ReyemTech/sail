@@ -148,11 +148,15 @@ class HelmTemplateTest extends TestCase
         // Three envFrom blocks must have this ordering: web Deployment, worker
         // Deployment, scheduler CronJob. A single-match assertion would miss a
         // regression in the scheduler stub.
+        // The regex tolerates an optional "optional: true" line after
+        // testapp-defaults (presync-migrate uses it because the Secret
+        // may not exist during PreSync hooks on first deploy).
         $matches = preg_match_all(
             '/envFrom:\s*'
                 .'\n\s*-\s*secretRef:\s*'
-                .'\n\s*name:\s*testapp-defaults\s*'
-                .'\n\s*-\s*secretRef:\s*'
+                .'\n\s*name:\s*testapp-defaults[^\n]*'
+                .'(?:\n\s*optional:\s*true)?'
+                .'\s*\n\s*-\s*secretRef:\s*'
                 .'\n\s*name:\s*testapp-environment/',
             $out
         );
