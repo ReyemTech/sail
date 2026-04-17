@@ -12,19 +12,15 @@ metadata:
     app.kubernetes.io/component: typesense
   annotations:
     helm.sh/resource-policy: keep
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+    argocd.argoproj.io/sync-options: Prune=false
 type: Opaque
-{{- $existingSecret := (lookup "v1" "Secret" .Release.Namespace $secretName) }}
-{{- if $existingSecret }}
-data:
-  {{- toYaml $existingSecret.data | nindent 2 }}
-{{- else }}
 stringData:
-  TYPESENSE_API_KEY: {{ .Values.typesense.apiKey | default (randAlphaNum 32) | quote }}
+  TYPESENSE_API_KEY: {{ .Values.typesense.apiKey | default "CHANGE_ME" | quote }}
   TYPESENSE_HOST: {{ $tsName }}
   TYPESENSE_PORT: "8108"
   TYPESENSE_PROTOCOL: http
   SCOUT_DRIVER: typesense
-{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -35,15 +31,13 @@ metadata:
     app.kubernetes.io/component: typesense
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ $tsName }}
   template:
     metadata:
-      annotations:
-        {{- if $existingSecret }}
-        checksum/typesense-secret: {{ $existingSecret.data | toJson | sha256sum }}
-        {{- end }}
       labels:
         app.kubernetes.io/name: {{ $tsName }}
         app.kubernetes.io/component: typesense
