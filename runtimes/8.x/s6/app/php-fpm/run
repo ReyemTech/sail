@@ -21,4 +21,4 @@ else
     fi
 fi
 
-exec with-contenv su-exec sail "$PHP_FPM_BIN" -F
+exec with-contenv "$PHP_FPM_BIN" -F
