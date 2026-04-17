@@ -64,6 +64,7 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ include "sail.name" . }}-defaults
+                optional: true
             - secretRef:
                 name: {{ include "sail.name" . }}-environment
 {{- end -}}
