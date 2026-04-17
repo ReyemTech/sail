@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.0.1](https://github.com/ReyemTech/sail/compare/v3.0.0...v3.0.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* **helm:** Typesense secret sync — remove lookup/randAlphaNum, add ArgoCD ignore ([95277f1](https://github.com/ReyemTech/sail/commit/95277f119bafc1ee8e096678a5899f2f9cea526c))
+
 ## [3.0.0](https://github.com/ReyemTech/sail/compare/v2.0.0...v3.0.0) (2026-04-17)
 
 
