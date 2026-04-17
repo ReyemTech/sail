@@ -161,6 +161,36 @@ class S6LogPipelineTest extends TestCase
         return $p->getOutput();
     }
 
+    /**
+     * Return the full command-line of the running s6-log process matching $prefix
+     * (e.g. "p[nginx]" or "p[php-fpm]"). Each s6-log invocation uses a different
+     * prefix argument, so this is a reliable disambiguator.
+     *
+     * Reads /proc/{pid}/cmdline directly — works on Alpine's busybox where ps -C is
+     * unsupported and ps axo formats vary. Polls for up to $timeoutSec seconds so
+     * we don't race s6 init.
+     */
+    protected function readS6LogArgs(string $cid, string $prefix, int $timeoutSec = 10): string
+    {
+        // NUL-separated cmdline args are joined with spaces for easy matching.
+        $script = 'for f in /proc/[0-9]*/cmdline; do line=$(cat "$f" 2>/dev/null | tr "\\0" " "); case "$line" in s6-log*) echo "$line" ;; esac; done';
+        $deadline = time() + $timeoutSec;
+        while (time() < $deadline) {
+            $out = $this->execInContainer($cid, ['sh', '-c', $script]);
+            foreach (preg_split('/\r?\n/', $out) as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                if (strpos($line, $prefix) !== false) {
+                    return $line;
+                }
+            }
+            usleep(300_000);
+        }
+        $this->fail("s6-log process with prefix $prefix did not appear within {$timeoutSec}s in container $cid");
+    }
+
     public function test_base_image_builds_successfully(): void
     {
         $p = new Process(['docker', 'image', 'inspect', self::$imageTag]);
@@ -249,36 +279,33 @@ class S6LogPipelineTest extends TestCase
     public function test_nginx_log_both_mode_args(): void
     {
         $cid = $this->runContainer();
-        sleep(3);
-        $run = $this->execInContainer($cid, ['cat', '/etc/s6-overlay/s6-rc.d/nginx-log/run']);
+        $args = $this->readS6LogArgs($cid, '[nginx]');
         $this->assertMatchesRegularExpression(
-            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!"gzip -nq9"\s+/var/log/nginx\s+p\[nginx\]\s+1#',
-            $run
+            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!gzip -nq9\s+/var/log/nginx\s+p\[nginx\]\s+1#',
+            $args
         );
     }
 
     public function test_nginx_log_stdout_mode_args(): void
     {
         $cid = $this->runContainer(['SAIL_LOG_MODE' => 'stdout']);
-        sleep(3);
-        $run = $this->execInContainer($cid, ['cat', '/etc/s6-overlay/s6-rc.d/nginx-log/run']);
+        $args = $this->readS6LogArgs($cid, '[nginx]');
         $this->assertMatchesRegularExpression(
-            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!"gzip -nq9"\s+p\[nginx\]\s+1#',
-            $run
+            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!gzip -nq9\s+p\[nginx\]\s+1#',
+            $args
         );
-        $this->assertStringNotContainsString('/var/log/nginx', $run);
+        $this->assertStringNotContainsString('/var/log/nginx', $args);
     }
 
     public function test_nginx_log_file_mode_args(): void
     {
         $cid = $this->runContainer(['SAIL_LOG_MODE' => 'file']);
-        sleep(3);
-        $run = $this->execInContainer($cid, ['cat', '/etc/s6-overlay/s6-rc.d/nginx-log/run']);
+        $args = $this->readS6LogArgs($cid, '[nginx]');
         $this->assertMatchesRegularExpression(
-            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!"gzip -nq9"\s+/var/log/nginx\s+p\[nginx\]$#m',
-            $run
+            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!gzip -nq9\s+/var/log/nginx\s+p\[nginx\]#',
+            $args
         );
-        $this->assertDoesNotMatchRegularExpression('/p\[nginx\]\s+1$/m', $run);
+        $this->assertDoesNotMatchRegularExpression('/p\[nginx\]\s+1/', $args);
     }
 
     public function test_nginx_log_custom_rotation_args(): void
@@ -288,41 +315,40 @@ class S6LogPipelineTest extends TestCase
             'SAIL_LOG_MAX_ARCHIVES' => '5',
             'SAIL_LOG_ROTATE_SIZE' => '5000000',
         ]);
-        sleep(3);
-        $run = $this->execInContainer($cid, ['cat', '/etc/s6-overlay/s6-rc.d/nginx-log/run']);
-        $this->assertMatchesRegularExpression('#s6-log\s+-b\s+n5\s+s5000000\s+T#', $run);
+        $args = $this->readS6LogArgs($cid, '[nginx]');
+        $this->assertMatchesRegularExpression('#s6-log\s+-b\s+n5\s+s5000000\s+T#', $args);
     }
 
     public function test_php_fpm_log_both_mode_args(): void
     {
         $cid = $this->runContainer();
-        sleep(3);
-        $run = $this->execInContainer($cid, ['cat', '/etc/s6-overlay/s6-rc.d/php-fpm-log/run']);
+        $args = $this->readS6LogArgs($cid, '[php-fpm]');
         $this->assertMatchesRegularExpression(
-            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!"gzip -nq9"\s+/var/log/php-fpm\s+p\[php-fpm\]\s+1#',
-            $run
+            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!gzip -nq9\s+/var/log/php-fpm\s+p\[php-fpm\]\s+1#',
+            $args
         );
     }
 
     public function test_php_fpm_log_stdout_mode_args(): void
     {
         $cid = $this->runContainer(['SAIL_LOG_MODE' => 'stdout']);
-        sleep(3);
-        $run = $this->execInContainer($cid, ['cat', '/etc/s6-overlay/s6-rc.d/php-fpm-log/run']);
-        $this->assertMatchesRegularExpression('#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!"gzip -nq9"\s+p\[php-fpm\]\s+1#', $run);
-        $this->assertStringNotContainsString('/var/log/php-fpm', $run);
+        $args = $this->readS6LogArgs($cid, '[php-fpm]');
+        $this->assertMatchesRegularExpression(
+            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!gzip -nq9\s+p\[php-fpm\]\s+1#',
+            $args
+        );
+        $this->assertStringNotContainsString('/var/log/php-fpm', $args);
     }
 
     public function test_php_fpm_log_file_mode_args(): void
     {
         $cid = $this->runContainer(['SAIL_LOG_MODE' => 'file']);
-        sleep(3);
-        $run = $this->execInContainer($cid, ['cat', '/etc/s6-overlay/s6-rc.d/php-fpm-log/run']);
+        $args = $this->readS6LogArgs($cid, '[php-fpm]');
         $this->assertMatchesRegularExpression(
-            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!"gzip -nq9"\s+/var/log/php-fpm\s+p\[php-fpm\]$#m',
-            $run
+            '#s6-log\s+-b\s+n20\s+s10000000\s+T\s+!gzip -nq9\s+/var/log/php-fpm\s+p\[php-fpm\]#',
+            $args
         );
-        $this->assertDoesNotMatchRegularExpression('/p\[php-fpm\]\s+1$/m', $run);
+        $this->assertDoesNotMatchRegularExpression('/p\[php-fpm\]\s+1/', $args);
     }
 
     public function test_invalid_mode_fails_fast(): void
@@ -340,6 +366,30 @@ class S6LogPipelineTest extends TestCase
         $this->assertStringContainsString("invalid SAIL_LOG_MODE='bogus'", $combined);
     }
 
+    public function test_container_boots_with_read_only_root_filesystem(): void
+    {
+        $p = new Process([
+            'docker', 'run', '-d',
+            '--entrypoint', '/init',
+            '--read-only',
+            '--tmpfs', '/tmp:rw,exec',
+            '--tmpfs', '/var/log/nginx:rw',
+            '--tmpfs', '/var/log/php-fpm:rw',
+            '--tmpfs', '/var/log/php:rw',
+            '--tmpfs', '/run:rw,exec',
+            self::$imageTag,
+        ]);
+        $p->mustRun();
+        $cid = trim($p->getOutput());
+        $this->runningContainers[] = $cid;
+
+        $this->waitForProcess($cid, 's6-svscan', 20);
+
+        $args = $this->readS6LogArgs($cid, '[nginx]', 15);
+        $this->assertStringContainsString('s6-log', $args);
+        $this->assertStringContainsString('p[nginx]', $args);
+    }
+
     public function test_http_request_appears_in_stdout_and_on_disk_by_default(): void
     {
         $p = new Process([
@@ -354,24 +404,56 @@ class S6LogPipelineTest extends TestCase
         $this->waitForProcess($cid, 'nginx', 15);
 
         $marker = '/e2e-marker-'.uniqid();
-        // Make the HTTP request via the container's own loopback so we avoid
-        // host-side networking quirks (proxy env vars, macOS port forwarding).
-        $wgetProc = new Process([
-            'docker', 'exec', $cid,
-            'wget', '-q', '-O', '/dev/null',
-            '--timeout=3',
-            "http://127.0.0.1$marker",
-        ]);
-        $wgetProc->run();
 
-        sleep(2);
+        // Retry wget until nginx accepts connections — pgrep sees the process
+        // before nginx binds port 80, causing "Connection refused" on slow CI.
+        $wgetSuccess = false;
+        $deadline = time() + 15;
+        while (time() < $deadline) {
+            $wgetProc = new Process([
+                'docker', 'exec', $cid,
+                'wget', '-q', '-O', '/dev/null', '--timeout=3',
+                "http://127.0.0.1$marker",
+            ]);
+            $wgetProc->run();
+            // wget returns 0 on 2xx, non-zero on errors AND on 4xx/5xx.
+            // A 404 (no app) still means nginx received the request and logged it.
+            // "Connection refused" returns exit code 4 and the output contains "refused".
+            $err = $wgetProc->getErrorOutput();
+            if (strpos($err, 'Connection refused') === false && strpos($err, 'can\'t connect') === false) {
+                $wgetSuccess = true;
+                break;
+            }
+            usleep(500_000);
+        }
+        $this->assertTrue($wgetSuccess, 'wget could not connect to nginx within 15s');
 
-        $logsProc = new Process(['docker', 'logs', $cid]);
-        $logsProc->run();
-        $logs = $logsProc->getOutput().$logsProc->getErrorOutput();
-        $this->assertStringContainsString($marker, $logs, 'stdout did not contain the request path');
+        // Poll on-disk log first (synchronous write — no buffering uncertainty).
+        $onDiskFound = false;
+        $deadline = time() + 10;
+        while (time() < $deadline) {
+            $onDisk = $this->execInContainer($cid, ['cat', '/var/log/nginx/current']);
+            if (str_contains($onDisk, $marker)) {
+                $onDiskFound = true;
+                break;
+            }
+            usleep(500_000);
+        }
+        $this->assertTrue($onDiskFound, "s6-log /var/log/nginx/current did not contain '$marker' within 10s");
 
-        $onDisk = $this->execInContainer($cid, ['cat', '/var/log/nginx/current']);
-        $this->assertStringContainsString($marker, $onDisk, 's6-log /var/log/nginx/current did not contain the request path');
+        // Now poll docker logs for the stdout tee (may be delayed by docker log driver buffering).
+        $stdoutFound = false;
+        $deadline = time() + 10;
+        while (time() < $deadline) {
+            $logsProc = new Process(['docker', 'logs', $cid]);
+            $logsProc->run();
+            $logs = $logsProc->getOutput().$logsProc->getErrorOutput();
+            if (str_contains($logs, $marker)) {
+                $stdoutFound = true;
+                break;
+            }
+            usleep(500_000);
+        }
+        $this->assertTrue($stdoutFound, "docker logs (stdout) did not contain '$marker' within 10s");
     }
 }
