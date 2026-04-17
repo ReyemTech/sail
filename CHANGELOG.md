@@ -1,5 +1,14 @@
 # Release Notes
 
+## [3.0.3](https://github.com/ReyemTech/sail/compare/v3.0.2...v3.0.3) (2026-04-17)
+
+
+### Bug Fixes
+
+* **image:** add listen directive to php-fpm pool config ([5244f12](https://github.com/ReyemTech/sail/commit/5244f12fc352506823606fa94ef504ccd89152fe))
+* **image:** add listen directive to php-fpm pool config ([66901d9](https://github.com/ReyemTech/sail/commit/66901d97dfa4653f3eff5e96b4c78849be20a4d5))
+* **test:** tolerate optional: true in envFrom order regex ([ef6a3e4](https://github.com/ReyemTech/sail/commit/ef6a3e4c386d17829959003478cf4edb9b212bce))
+
 ## [3.0.2](https://github.com/ReyemTech/sail/compare/v3.0.1...v3.0.2) (2026-04-17)
 
 
