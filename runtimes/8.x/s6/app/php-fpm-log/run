@@ -1,2 +1,9 @@
-#!/bin/sh
-exec s6-log -b n20 s10000000 T !"gzip -nq9" /var/log/php-fpm p[php-fpm] 1
+#!/command/with-contenv /bin/sh
+ARCHIVES="${SAIL_LOG_MAX_ARCHIVES:-20}"
+SIZE="${SAIL_LOG_ROTATE_SIZE:-10000000}"
+case "${SAIL_LOG_MODE:-both}" in
+  stdout) exec s6-log -b n${ARCHIVES} s${SIZE} T !"gzip -nq9" p[php-fpm] 1 ;;
+  file)   exec s6-log -b n${ARCHIVES} s${SIZE} T !"gzip -nq9" /var/log/php-fpm p[php-fpm] ;;
+  both)   exec s6-log -b n${ARCHIVES} s${SIZE} T !"gzip -nq9" /var/log/php-fpm p[php-fpm] 1 ;;
+  *)      echo "php-fpm-log: invalid SAIL_LOG_MODE='${SAIL_LOG_MODE}' (expected stdout|file|both)" >&2; exit 1 ;;
+esac

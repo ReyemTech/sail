@@ -217,7 +217,15 @@ service:
   port: 80
   # annotations: {}  # Annotations to add to the service
 
-# Kubernetes resource requests/limits (CPU/memory)
+# Suggested Kubernetes resource requests/limits applied to all deployment
+# tiers unless overridden per-tier (e.g. web.resources or worker.resources).
+# These values are the recommended starting point for a Laravel web/worker
+# pod; override per consumer as needed.
+#
+# If this block is set to null or omitted entirely, the sail.resources
+# helper falls back to hardcoded defaults (requests 100m/256Mi, limits
+# 1000m/1Gi), which are intentionally more generous than the suggested
+# values below to tolerate unoptimized workloads.
 resources:
   requests:
     cpu: 100m
@@ -290,6 +298,32 @@ s3:
     secret: ""            # nimbus MinIO replicated secret (accessKeyId, secretAccessKey, bucket, endpoint)
     region: us-east-1     # AWS_DEFAULT_REGION
     pathStyle: "true"     # AWS_USE_PATH_STYLE_ENDPOINT
+
+# Laravel application behavior defaults. These become a chart-owned
+# Secret (<name>-defaults) prepended to envFrom; the consumer's
+# <name>-environment secret takes precedence (envFrom later-entry-wins).
+app:
+  # LOG_CHANNEL default - stderr flows logs through php-fpm stderr to
+  # the s6-log pipeline (stdout + rotated file per sail.logging.mode).
+  logChannel: stderr
+  # CACHE_DRIVER / SESSION_DRIVER are only written to the defaults
+  # secret when redis.secret is set. Unset (file default) otherwise.
+  cacheDriver: redis
+  sessionDriver: redis
+
+# Logging pipeline behavior (web tier nginx/php-fpm logs).
+# Worker/scheduler pods bypass s6 entirely; their logs always go to stdout.
+logging:
+  # stdout - logs only to container stdout, kubelet rotates (~12Mi/pod).
+  # file   - logs only to /var/log/{nginx,php-fpm}/ rotated by s6-log.
+  # both   - logs to rotated files AND stdout tee (default).
+  mode: both
+  # s6-log -n argument: number of rotated archives retained per service.
+  maxArchives: 20
+  # s6-log -s argument: bytes per file before rotation. Raw integer (no suffix,
+  # no K/M/G). Large values are safe; the chart prevents Helm's default
+  # scientific-notation coercion.
+  maxFileSize: 10000000
 
 # Typesense search (deploys Typesense when enabled)
 typesense:
