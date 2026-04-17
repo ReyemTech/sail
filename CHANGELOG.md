@@ -1,5 +1,13 @@
 # Release Notes
 
+## [3.0.2](https://github.com/ReyemTech/sail/compare/v3.0.1...v3.0.2) (2026-04-17)
+
+
+### Bug Fixes
+
+* **helm:** make defaults secret optional in presync-migrate ([5016c1d](https://github.com/ReyemTech/sail/commit/5016c1d4ad83c53593e48fd8d9c4cdba1f6637dc))
+* **image:** remove Alpine default www.conf that overrides pool user ([a918cf5](https://github.com/ReyemTech/sail/commit/a918cf5787718c3c993a519abf6f55febbe8025d))
+
 ## [3.0.1](https://github.com/ReyemTech/sail/compare/v3.0.0...v3.0.1) (2026-04-17)
 
 
