@@ -98,6 +98,11 @@ COPY --from=runtime php.ini /etc/php/conf.d/99-sail.ini
 COPY --from=runtime nginx.conf /etc/nginx/http.d/default.conf
 COPY --from=runtime php-fpm.conf /etc/php/php-fpm.d/docker.conf
 
+# Remove Alpine's default php-fpm pool config — it defines [www] with
+# user=nobody which overrides our docker.conf's user=sail when the
+# master runs as root (alphabetical load order: docker.conf then www.conf).
+RUN rm -f /etc/php*/php-fpm.d/www.conf
+
 # S6
 COPY --from=runtime ./s6/app /etc/s6-overlay/s6-rc.d/
 
