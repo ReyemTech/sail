@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.0.4](https://github.com/ReyemTech/sail/compare/v3.0.3...v3.0.4) (2026-04-18)
+
+
+### Bug Fixes
+
+* **helm:** clear rollingUpdate when strategy is Recreate ([94fd5cd](https://github.com/ReyemTech/sail/commit/94fd5cd939939d1207cdaf6a1a7490c362b29e0c))
+
 ## [3.0.3](https://github.com/ReyemTech/sail/compare/v3.0.2...v3.0.3) (2026-04-17)
 
 
