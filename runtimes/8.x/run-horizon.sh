@@ -2,12 +2,14 @@
 
 cd /var/www
 
-# Check APP_ENV to determine if dev dependencies should be included
-if [ "$APP_ENV" = "production" ]; then
-    composer install --optimize-autoloader --prefer-dist --no-dev
-else
-    # Local/development: include dev dependencies
-    composer install --optimize-autoloader --prefer-dist
+# Only run composer install if vendor directory is missing (e.g. local dev).
+# Production images ship with vendor/ baked in.
+if [ ! -d "vendor" ]; then
+    if [ "$APP_ENV" = "production" ]; then
+        composer install --optimize-autoloader --prefer-dist --no-dev
+    else
+        composer install --optimize-autoloader --prefer-dist
+    fi
 fi
 
 # Check if horizon command exists (still optional)
