@@ -231,8 +231,8 @@ resources:
     cpu: 100m
     memory: 256Mi
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: "2"
+    memory: 1Gi
 
 # Pod/container security context defaults
 securityContext:

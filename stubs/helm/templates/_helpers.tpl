@@ -115,7 +115,7 @@ Render the container resources block.
 Fallback order:
   1. tier-scoped .resources (from $scoped in deployment-*.stub)
   2. top-level .main.resources
-  3. hardcoded defaults (cpu 100m/1000m, memory 256Mi/1Gi)
+  3. hardcoded defaults (cpu 100m/2000m, memory 256Mi/1Gi)
 
 Ephemeral-storage is deliberately omitted — spec 1's LimitRange
 injects 500Mi/2Gi at the namespace level.
@@ -136,7 +136,7 @@ requests:
   cpu: 100m
   memory: 256Mi
 limits:
-  cpu: 1000m
+  cpu: "2"
   memory: 1Gi
 {{- end }}
 {{- end -}}
