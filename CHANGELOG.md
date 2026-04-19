@@ -1,5 +1,18 @@
 # Release Notes
 
+## [3.1.0](https://github.com/ReyemTech/sail/compare/v3.0.4...v3.1.0) (2026-04-19)
+
+
+### Features
+
+* add values.production.yaml for user-owned helm overrides ([0991678](https://github.com/ReyemTech/sail/commit/0991678e0e5d5b6f688d24e06920c47110b50bd6))
+
+
+### Bug Fixes
+
+* raise default CPU limit from 1 to 2 cores ([aa40893](https://github.com/ReyemTech/sail/commit/aa40893b93cc1dafdea340ef95abc17b03b196b2))
+* skip composer install when vendor/ exists in worker image ([f3fe749](https://github.com/ReyemTech/sail/commit/f3fe74947a1d6ac20e5bfa431a2908b732894df5))
+
 ## [3.0.4](https://github.com/ReyemTech/sail/compare/v3.0.3...v3.0.4) (2026-04-18)
 
 
