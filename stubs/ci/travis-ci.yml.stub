@@ -8,9 +8,9 @@ services:
 
 env:
   global:
-    - REGISTRY={{REPOSITORY}}
-    - ORGANIZATION={{ORGANIZATION}}
-    - APP_NAME={{APP_NAME}}
+    - REGISTRY=__REPOSITORY__
+    - ORGANIZATION=__ORGANIZATION__
+    - APP_NAME=__APP_NAME__
 
 branches:
   only:

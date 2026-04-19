@@ -1,71 +1,120 @@
-name: Build Docker Images
+name: CI
 
 on:
   push:
-    branches:
-      - main
-      - master
-    tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build (e.g., 1.2.3)'
-        required: false
-        type: string
+    branches: [__BRANCH__]
+  pull_request:
+    branches: [__BRANCH__]
 
 env:
-  PHP_VERSION: 8.4
-  REGISTRY: {{REPOSITORY}}
-  ORGANIZATION: {{ORGANIZATION}}
-  APP_NAME: {{APP_NAME}}
+  PHP_VERSION: '__PHP_VERSION__'
+  REGISTRY: __REPOSITORY__
+  ORGANIZATION: __ORGANIZATION__
+  APP_NAME: __APP_NAME__
+  RUNTIME_DIR: vendor/reyemtech/sail/runtimes/8.x
+  BAKE_FILE: vendor/reyemtech/sail/runtimes/8.x/docker-bake.hcl
+  WEB_IMAGE: __REPOSITORY__/__ORGANIZATION__/__APP_NAME__-web
+  WORKER_IMAGE: __REPOSITORY__/__ORGANIZATION__/__APP_NAME__-worker
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    services:
+__DB_SERVICE__
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, __DB_EXTENSIONS__, redis
+          tools: composer:v2
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Cache Vite build
+        uses: actions/cache@v4
+        with:
+          path: public/build
+          key: vite-${{ hashFiles('resources/**/*', 'vite.config.js', 'package-lock.json') }}
+          restore-keys: vite-
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate application key
+        run: php artisan key:generate
+
+      - name: Run tests
+        env:
+__DB_ENV__
+          REDIS_HOST: 127.0.0.1
+        run: php artisan test --parallel
+
+  release-please:
+    needs: test
+    if: github.ref == 'refs/heads/__BRANCH__'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
-
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: linux/amd64
+            suffix: amd64
+          - runner: ubuntu-24.04-arm
+            arch: linux/arm64
+            suffix: arm64
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Configure AWS credentials for ECR (if using ECR)
-        if: contains(env.REGISTRY, 'ecr') || contains(env.REGISTRY, 'amazonaws.com')
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
-
-      - name: Log in to Azure Container Registry (if using ACR)
-        if: contains(env.REGISTRY, 'azurecr.io')
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Log in to Container Registry
-        if: "!contains(env.REGISTRY, 'ecr') && !contains(env.REGISTRY, 'amazonaws.com') && !contains(env.REGISTRY, 'azurecr.io')"
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME || secrets.GHCR_IO_USERNAME || github.actor }}
-          password: ${{ secrets.REGISTRY_PASSWORD || secrets.GHCR_IO_PASSWORD || github.token }}
-
-      - name: Extract version from tag or use input
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          else
-            echo "version=$(date +'%Y.%m.%d')-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
-          fi
+      - uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -73,26 +122,127 @@ jobs:
           php-version: ${{ env.PHP_VERSION }}
           tools: composer:v2
 
-      - name: Install Composer Dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ matrix.suffix }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.suffix }}-
 
-      - name: Build Docker Images and Helm Chart
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Generate mkcert root CA placeholder
         run: |
-          php artisan sail:build \
-            --environments=production \
-            --architectures=linux/amd64,linux/arm64 \
-            --repository=${{ env.REGISTRY }} \
-            --organization=${{ env.ORGANIZATION }} \
-            --build-version=${{ steps.version.outputs.version }} \
-            --push \
-            --use-previous \
-            --bump=no
+          mkdir -p "${{ env.RUNTIME_DIR }}/certs"
+          touch "${{ env.RUNTIME_DIR }}/certs/mkcert-rootCA.pem"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push images
+        env:
+          BUILD_VERSION: ${{ needs.release-please.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          SUFFIX: ${{ matrix.suffix }}
+          PUSH: true
+          REGISTRY: ${{ env.REGISTRY }}
+          ORG: ${{ env.ORGANIZATION }}
+          APP_NAME: ${{ env.APP_NAME }}
+          ARCHS: ${{ matrix.arch }}
+          RUNTIME_DIR: ${{ env.RUNTIME_DIR }}
+          APP_DIR: "."
+        run: |
+          VERSION="${BUILD_VERSION}-${SUFFIX}" \
+          docker buildx bake \
+            -f "${{ env.BAKE_FILE }}" \
+            --set "*.platform=$ARCH" \
+            --set "production-cli.tags=${{ env.WORKER_IMAGE }}:${BUILD_VERSION}-${SUFFIX}" \
+            --set "production-fpm.tags=${{ env.WEB_IMAGE }}:${BUILD_VERSION}-${SUFFIX}" \
+            --set "production-cli.output=type=registry" \
+            --set "production-fpm.output=type=registry" \
+            --provenance=false \
+            production-cli production-fpm
+
+  manifest:
+    needs: [release-please, build]
+    if: needs.release-please.outputs.release_created
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest for web
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          docker manifest create "${{ env.WEB_IMAGE }}:$VERSION" \
+            "${{ env.WEB_IMAGE }}:$VERSION-amd64" \
+            "${{ env.WEB_IMAGE }}:$VERSION-arm64"
+          docker manifest push "${{ env.WEB_IMAGE }}:$VERSION"
+          docker manifest create "${{ env.WEB_IMAGE }}:latest" \
+            "${{ env.WEB_IMAGE }}:$VERSION-amd64" \
+            "${{ env.WEB_IMAGE }}:$VERSION-arm64"
+          docker manifest push "${{ env.WEB_IMAGE }}:latest"
+
+      - name: Create multi-arch manifest for worker
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          docker manifest create "${{ env.WORKER_IMAGE }}:$VERSION" \
+            "${{ env.WORKER_IMAGE }}:$VERSION-amd64" \
+            "${{ env.WORKER_IMAGE }}:$VERSION-arm64"
+          docker manifest push "${{ env.WORKER_IMAGE }}:$VERSION"
+          docker manifest create "${{ env.WORKER_IMAGE }}:latest" \
+            "${{ env.WORKER_IMAGE }}:$VERSION-amd64" \
+            "${{ env.WORKER_IMAGE }}:$VERSION-arm64"
+          docker manifest push "${{ env.WORKER_IMAGE }}:latest"
 
       - name: Summary
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
         run: |
-          echo "## 🐳 Docker Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Registry:** ${{ env.REGISTRY }}/${{ env.ORGANIZATION }}/${{ env.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Images:** web, worker" >> $GITHUB_STEP_SUMMARY
+          echo "## Build & Deploy Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version:** $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Web:** ${{ env.WEB_IMAGE }}:$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Worker:** ${{ env.WORKER_IMAGE }}:$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Helm chart updated** — ArgoCD will pick up the change" >> "$GITHUB_STEP_SUMMARY"
 
+  helm:
+    needs: [release-please, manifest]
+    if: needs.release-please.outputs.release_created
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release-please.outputs.version }}
+
+      - name: Log in to GHCR for Helm
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_ACTOR: ${{ github.actor }}
+        run: echo "$GH_TOKEN" | helm registry login ghcr.io -u "$GH_ACTOR" --password-stdin
+
+      - name: Package and push Helm chart
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          helm package helm/
+          helm push __APP_NAME__-${VERSION}.tgz oci://${{ env.REGISTRY }}/${{ env.ORGANIZATION }}/charts

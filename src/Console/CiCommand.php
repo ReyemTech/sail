@@ -16,6 +16,7 @@ class CiCommand extends Command
      */
     protected $signature = 'sail:ci
                             {--provider= : CI provider (github-actions, circleci, travis)}
+                            {--branch= : Default branch name (main or master)}
                             {--overwrite : Overwrite existing CI configuration files}';
 
     /**
@@ -87,7 +88,7 @@ class CiCommand extends Command
     protected function setupGitHubActions(bool $overwrite): int
     {
         $workflowDir = base_path('.github/workflows');
-        $workflowFile = $workflowDir.'/build.yml';
+        $workflowFile = $workflowDir.'/ci.yml';
 
         if (file_exists($workflowFile) && ! $overwrite) {
             $this->components->error('GitHub Actions workflow already exists at: '.$workflowFile);
@@ -103,32 +104,116 @@ class CiCommand extends Command
         $stubPath = __DIR__.'/../../stubs/ci/github-actions-build.yml.stub';
         $stub = file_get_contents($stubPath);
 
-        // Replace placeholders
-        $stub = str_replace('{{APP_NAME}}', Str::slug(config('app.name', 'laravel')), $stub);
-        $stub = str_replace('{{REPOSITORY}}', config('sail.build.repository', 'ghcr.io'), $stub);
-        $stub = str_replace('{{ORGANIZATION}}', config('sail.build.organization', 'reyemtech'), $stub);
+        $appName = Str::slug(config('app.name', 'laravel'));
+        $repository = config('sail.build.repository', 'ghcr.io');
+        $organization = config('sail.build.organization', 'my-org');
+        $phpVersion = PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;
+        $branch = $this->option('branch') ?: $this->detectDefaultBranch();
+        $dbConnection = config('database.default', 'mysql');
+
+        // Core placeholders
+        $stub = str_replace('__APP_NAME__', $appName, $stub);
+        $stub = str_replace('__REPOSITORY__', $repository, $stub);
+        $stub = str_replace('__ORGANIZATION__', $organization, $stub);
+        $stub = str_replace('__PHP_VERSION__', $phpVersion, $stub);
+        $stub = str_replace('__BRANCH__', $branch, $stub);
+
+        // Database-specific blocks
+        if ($dbConnection === 'pgsql') {
+            $stub = str_replace('__DB_SERVICE__', $this->postgresService(), $stub);
+            $stub = str_replace('__DB_EXTENSIONS__', 'pdo_pgsql', $stub);
+            $stub = str_replace('__DB_ENV__', $this->postgresEnv(), $stub);
+        } else {
+            $stub = str_replace('__DB_SERVICE__', $this->mysqlService(), $stub);
+            $stub = str_replace('__DB_EXTENSIONS__', 'pdo_mysql', $stub);
+            $stub = str_replace('__DB_ENV__', $this->mysqlEnv(), $stub);
+        }
 
         file_put_contents($workflowFile, $stub);
 
         $this->output->writeln('  <fg=green>✓</> Created GitHub Actions workflow: '.$workflowFile);
         $this->output->writeln('');
+        $this->components->info('📝 Configuration detected:');
+        $this->output->writeln("     PHP: {$phpVersion}");
+        $this->output->writeln("     Database: {$dbConnection}");
+        $this->output->writeln("     Branch: {$branch}");
+        $this->output->writeln("     Registry: {$repository}/{$organization}/{$appName}");
+        $this->output->writeln('');
         $this->components->info('📝 Next steps:');
-        $this->output->writeln('  1. Add the following secrets to your GitHub repository:');
-        $registry = config('sail.build.repository', 'ghcr.io');
-        if (strpos($registry, 'ecr') !== false || strpos($registry, 'amazonaws.com') !== false) {
-            $this->output->writeln('     - AWS_ACCESS_KEY_ID');
-            $this->output->writeln('     - AWS_SECRET_ACCESS_KEY');
-            $this->output->writeln('     - AWS_REGION (optional, defaults to us-east-1)');
-        } elseif (strpos($registry, 'azurecr.io') !== false) {
-            $this->output->writeln('     - AZURE_CREDENTIALS (JSON with service principal)');
-        } else {
-            $this->output->writeln('     - REGISTRY_USERNAME (or GHCR_IO_USERNAME for GitHub Container Registry)');
-            $this->output->writeln('     - REGISTRY_PASSWORD (or GHCR_IO_PASSWORD for GitHub Container Registry)');
-        }
-        $this->output->writeln('  2. Customize the workflow file if needed');
+        $this->output->writeln('  1. Add release-please config files if not present:');
+        $this->output->writeln('     - release-please-config.json');
+        $this->output->writeln('     - .release-please-manifest.json');
+        $this->output->writeln('  2. Ensure GITHUB_TOKEN has packages:write permission');
+        $this->output->writeln('  3. Review and customize the workflow as needed');
         $this->output->writeln('');
 
         return 0;
+    }
+
+    protected function detectDefaultBranch(): string
+    {
+        $gitDir = base_path('.git');
+        if (is_dir($gitDir)) {
+            $head = @file_get_contents($gitDir.'/HEAD');
+            if ($head && preg_match('#refs/heads/(\S+)#', $head, $matches)) {
+                return $matches[1];
+            }
+        }
+
+        return 'main';
+    }
+
+    protected function mysqlService(): string
+    {
+        return <<<'YAML'
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: testing
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+YAML;
+    }
+
+    protected function postgresService(): string
+    {
+        return <<<'YAML'
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testing
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready" --health-interval=10s --health-timeout=5s --health-retries=3
+YAML;
+    }
+
+    protected function mysqlEnv(): string
+    {
+        return <<<'YAML'
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: testing
+          DB_USERNAME: root
+          DB_PASSWORD: password
+YAML;
+    }
+
+    protected function postgresEnv(): string
+    {
+        return <<<'YAML'
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: testing
+          DB_USERNAME: postgres
+          DB_PASSWORD: password
+YAML;
     }
 
     /**
@@ -153,9 +238,9 @@ class CiCommand extends Command
         $stub = file_get_contents($stubPath);
 
         // Replace placeholders
-        $stub = str_replace('{{APP_NAME}}', Str::slug(config('app.name', 'laravel')), $stub);
-        $stub = str_replace('{{REPOSITORY}}', config('sail.build.repository', 'ghcr.io'), $stub);
-        $stub = str_replace('{{ORGANIZATION}}', config('sail.build.organization', 'reyemtech'), $stub);
+        $stub = str_replace('__APP_NAME__', Str::slug(config('app.name', 'laravel')), $stub);
+        $stub = str_replace('__REPOSITORY__', config('sail.build.repository', 'ghcr.io'), $stub);
+        $stub = str_replace('__ORGANIZATION__', config('sail.build.organization', 'my-org'), $stub);
 
         file_put_contents($configFile, $stub);
 
@@ -189,9 +274,9 @@ class CiCommand extends Command
         $stub = file_get_contents($stubPath);
 
         // Replace placeholders
-        $stub = str_replace('{{APP_NAME}}', Str::slug(config('app.name', 'laravel')), $stub);
-        $stub = str_replace('{{REPOSITORY}}', config('sail.build.repository', 'ghcr.io'), $stub);
-        $stub = str_replace('{{ORGANIZATION}}', config('sail.build.organization', 'reyemtech'), $stub);
+        $stub = str_replace('__APP_NAME__', Str::slug(config('app.name', 'laravel')), $stub);
+        $stub = str_replace('__REPOSITORY__', config('sail.build.repository', 'ghcr.io'), $stub);
+        $stub = str_replace('__ORGANIZATION__', config('sail.build.organization', 'my-org'), $stub);
 
         file_put_contents($configFile, $stub);
 
@@ -225,9 +310,9 @@ class CiCommand extends Command
         $stub = file_get_contents($stubPath);
 
         // Replace placeholders
-        $stub = str_replace('{{APP_NAME}}', Str::slug(config('app.name', 'laravel')), $stub);
-        $stub = str_replace('{{REPOSITORY}}', config('sail.build.repository', 'ghcr.io'), $stub);
-        $stub = str_replace('{{ORGANIZATION}}', config('sail.build.organization', 'reyemtech'), $stub);
+        $stub = str_replace('__APP_NAME__', Str::slug(config('app.name', 'laravel')), $stub);
+        $stub = str_replace('__REPOSITORY__', config('sail.build.repository', 'ghcr.io'), $stub);
+        $stub = str_replace('__ORGANIZATION__', config('sail.build.organization', 'my-org'), $stub);
 
         file_put_contents($configFile, $stub);
 
@@ -277,9 +362,9 @@ class CiCommand extends Command
         $stub = file_get_contents($stubPath);
 
         // Replace placeholders
-        $stub = str_replace('{{APP_NAME}}', Str::slug(config('app.name', 'laravel')), $stub);
-        $stub = str_replace('{{REPOSITORY}}', config('sail.build.repository', 'ghcr.io'), $stub);
-        $stub = str_replace('{{ORGANIZATION}}', config('sail.build.organization', 'reyemtech'), $stub);
+        $stub = str_replace('__APP_NAME__', Str::slug(config('app.name', 'laravel')), $stub);
+        $stub = str_replace('__REPOSITORY__', config('sail.build.repository', 'ghcr.io'), $stub);
+        $stub = str_replace('__ORGANIZATION__', config('sail.build.organization', 'my-org'), $stub);
 
         file_put_contents($pipelineFile, $stub);
 
@@ -323,9 +408,9 @@ class CiCommand extends Command
         $stub = file_get_contents($stubPath);
 
         // Replace placeholders
-        $stub = str_replace('{{APP_NAME}}', Str::slug(config('app.name', 'laravel')), $stub);
-        $stub = str_replace('{{REPOSITORY}}', config('sail.build.repository', 'ghcr.io'), $stub);
-        $stub = str_replace('{{ORGANIZATION}}', config('sail.build.organization', 'reyemtech'), $stub);
+        $stub = str_replace('__APP_NAME__', Str::slug(config('app.name', 'laravel')), $stub);
+        $stub = str_replace('__REPOSITORY__', config('sail.build.repository', 'ghcr.io'), $stub);
+        $stub = str_replace('__ORGANIZATION__', config('sail.build.organization', 'my-org'), $stub);
 
         file_put_contents($buildspecFile, $stub);
 

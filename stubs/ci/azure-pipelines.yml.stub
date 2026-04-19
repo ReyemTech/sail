@@ -12,9 +12,9 @@ pool:
 
 variables:
   phpVersion: '8.4'
-  registry: '{{REPOSITORY}}'
-  organization: '{{ORGANIZATION}}'
-  appName: '{{APP_NAME}}'
+  registry: '__REPOSITORY__'
+  organization: '__ORGANIZATION__'
+  appName: '__APP_NAME__'
 
 stages:
 - stage: Build
