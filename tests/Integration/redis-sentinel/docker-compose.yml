@@ -1,0 +1,125 @@
+# Local 3-node Bitnami Redis + 3 Sentinels for failover testing.
+# Mirrors the production topology managed by nimbus: 1 master, 2 replicas,
+# and a sentinel per data node providing quorum-based failover.
+#
+# Usage:
+#   docker compose -f tests/Integration/redis-sentinel/docker-compose.yml up -d
+#   redis-cli -h 127.0.0.1 -p 26379 -a redis-test-pw sentinel get-master-addr-by-name mymaster
+#   docker compose -f tests/Integration/redis-sentinel/docker-compose.yml down -v
+#
+# Bitnami sentinel image expects the data node to be reachable at REDIS_MASTER_HOST.
+# We point sentinels at the bootstrap master (redis-master). After failover, sentinels
+# re-elect among themselves and update their internal master pointer.
+
+services:
+  redis-master:
+    image: bitnamilegacy/redis:7.4
+    environment:
+      REDIS_REPLICATION_MODE: master
+      REDIS_PASSWORD: redis-test-pw
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis-test-pw", "ping"]
+      interval: 2s
+      timeout: 1s
+      retries: 5
+
+  redis-replica-1:
+    image: bitnamilegacy/redis:7.4
+    environment:
+      REDIS_REPLICATION_MODE: slave
+      REDIS_MASTER_HOST: redis-master
+      REDIS_MASTER_PASSWORD: redis-test-pw
+      REDIS_PASSWORD: redis-test-pw
+    ports:
+      - "16380:6379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
+  redis-replica-2:
+    image: bitnamilegacy/redis:7.4
+    environment:
+      REDIS_REPLICATION_MODE: slave
+      REDIS_MASTER_HOST: redis-master
+      REDIS_MASTER_PASSWORD: redis-test-pw
+      REDIS_PASSWORD: redis-test-pw
+    ports:
+      - "16381:6379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
+  sentinel-1:
+    image: bitnamilegacy/redis-sentinel:7.4
+    environment:
+      REDIS_MASTER_HOST: redis-master
+      REDIS_MASTER_SET: mymaster
+      REDIS_SENTINEL_QUORUM: "2"
+      REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS: "2000"
+      REDIS_SENTINEL_FAILOVER_TIMEOUT: "5000"
+      REDIS_SENTINEL_PASSWORD: redis-test-pw
+      REDIS_MASTER_PASSWORD: redis-test-pw
+    ports:
+      - "26379:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
+  sentinel-2:
+    image: bitnamilegacy/redis-sentinel:7.4
+    environment:
+      REDIS_MASTER_HOST: redis-master
+      REDIS_MASTER_SET: mymaster
+      REDIS_SENTINEL_QUORUM: "2"
+      REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS: "2000"
+      REDIS_SENTINEL_FAILOVER_TIMEOUT: "5000"
+      REDIS_SENTINEL_PASSWORD: redis-test-pw
+      REDIS_MASTER_PASSWORD: redis-test-pw
+    ports:
+      - "26380:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
+  sentinel-3:
+    image: bitnamilegacy/redis-sentinel:7.4
+    environment:
+      REDIS_MASTER_HOST: redis-master
+      REDIS_MASTER_SET: mymaster
+      REDIS_SENTINEL_QUORUM: "2"
+      REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS: "2000"
+      REDIS_SENTINEL_FAILOVER_TIMEOUT: "5000"
+      REDIS_SENTINEL_PASSWORD: redis-test-pw
+      REDIS_MASTER_PASSWORD: redis-test-pw
+    ports:
+      - "26381:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
+  # Phase 3 integration test runner. Lives in the same docker network as the
+  # sentinel stack so Sentinel-resolved master IPs (container network) are
+  # routable. Activate with `--profile tests`. The compose context is the
+  # redis-sentinel dir, so we mount the whole sail package root from ../../..
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.tests
+    volumes:
+      - ../../..:/app
+    working_dir: /app
+    profiles: ["tests"]
+    environment:
+      REDIS_SENTINEL_HOST: sentinel-1
+      REDIS_SENTINEL_PORT: "26379"
+      REDIS_SENTINEL_SERVICE: mymaster
+      REDIS_PASSWORD: redis-test-pw
+    depends_on:
+      sentinel-1:
+        condition: service_started
+      sentinel-2:
+        condition: service_started
+      sentinel-3:
+        condition: service_started

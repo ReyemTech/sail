@@ -59,7 +59,8 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Laravel\\Sail\\SailServiceProvider"
+                "Laravel\\Sail\\SailServiceProvider",
+                "Laravel\\Sail\\Redis\\RedisSentinelServiceProvider"
             ]
         }
     },
