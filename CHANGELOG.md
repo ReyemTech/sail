@@ -1,5 +1,19 @@
 # Release Notes
 
+## [3.2.0](https://github.com/ReyemTech/sail/compare/v3.1.0...v3.2.0) (2026-05-02)
+
+
+### Features
+
+* **helm:** extract sail.laravelEnv helpers and wire env on scheduler ([58fbdb1](https://github.com/ReyemTech/sail/commit/58fbdb180abfc3d88a5139c41b84071118440ce5))
+* overhaul GitHub Actions CI stub with full production pipeline ([cdab71b](https://github.com/ReyemTech/sail/commit/cdab71b48d109be3eb5f5b337e0f71d1ff8478a1))
+* **redis:** add Sentinel-aware phpredis client driver ([7a9688b](https://github.com/ReyemTech/sail/commit/7a9688b6bf411ac858ec52572ae9e1682fabe2d5))
+
+
+### Bug Fixes
+
+* **helm:** remove rollingUpdate null from Recreate strategy ([e48d984](https://github.com/ReyemTech/sail/commit/e48d984a84dc23549bdc4c5d19918c9221515e8c))
+
 ## [3.1.0](https://github.com/ReyemTech/sail/compare/v3.0.4...v3.1.0) (2026-04-19)
 
 
