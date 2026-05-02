@@ -141,3 +141,157 @@ limits:
 {{- end }}
 {{- end -}}
 
+{{/*
+Render the env: entries shared by every Laravel pod (web, worker, scheduler).
+Wires SAIL_LOG_, DB_, REDIS_, REDIS_USE_SENTINEL, and AWS_/FILESYSTEM_DISK from
+k8s secrets and values. Detects context the same way sail.name does — uses
+.main.* if invoked from sail.laravelSpec, otherwise .Values.* at the chart root.
+
+REDIS_USE_SENTINEL is the consumer-app feature flag for the sentinel-aware
+Redis client (Laravel\Sail\Redis\PhpRedisSentinelConnector). Defaults to false
+so existing deployments keep their current direct-master connection until they
+opt in via `redis.useSentinel: true` in values.yaml.
+*/}}
+{{- define "sail.laravelEnv" -}}
+{{- $database := dict -}}
+{{- $redis := dict -}}
+{{- $s3 := dict -}}
+{{- $logging := dict -}}
+{{- if .main -}}
+{{- $database = .main.database | default dict -}}
+{{- $redis = .main.redis | default dict -}}
+{{- $s3 = .main.s3 | default dict -}}
+{{- $logging = .main.logging | default dict -}}
+{{- else -}}
+{{- $database = .Values.database | default dict -}}
+{{- $redis = .Values.redis | default dict -}}
+{{- $s3 = .Values.s3 | default dict -}}
+{{- $logging = .Values.logging | default dict -}}
+{{- end }}
+- name: SAIL_LOG_MODE
+  value: {{ $logging.mode | default "both" | quote }}
+- name: SAIL_LOG_MAX_ARCHIVES
+  value: {{ $logging.maxArchives | default 20 | int64 | toString | quote }}
+- name: SAIL_LOG_ROTATE_SIZE
+  value: {{ $logging.maxFileSize | default 10000000 | int64 | toString | quote }}
+{{- if $database.secret }}
+- name: DB_CONNECTION
+  value: {{ $database.connection | default "mysql" }}
+- name: DB_HOST
+  valueFrom:
+    secretKeyRef:
+      name: {{ $database.secret }}
+      key: host
+- name: DB_PORT
+  valueFrom:
+    secretKeyRef:
+      name: {{ $database.secret }}
+      key: port
+- name: DB_DATABASE
+  valueFrom:
+    secretKeyRef:
+      name: {{ $database.secret }}
+      key: database
+- name: DB_USERNAME
+  valueFrom:
+    secretKeyRef:
+      name: {{ $database.secret }}
+      key: username
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $database.secret }}
+      key: password
+{{- end }}
+{{- if $redis.secret }}
+- name: REDIS_HOST
+  valueFrom:
+    secretKeyRef:
+      name: {{ $redis.secret }}
+      key: host
+- name: REDIS_PORT
+  valueFrom:
+    secretKeyRef:
+      name: {{ $redis.secret }}
+      key: port
+- name: REDIS_CLIENT
+  value: phpredis
+- name: REDIS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $redis.secret }}
+      key: password
+- name: REDIS_SENTINEL_HOST
+  valueFrom:
+    secretKeyRef:
+      name: {{ $redis.secret }}
+      key: sentinel_host
+- name: REDIS_SENTINEL_PORT
+  valueFrom:
+    secretKeyRef:
+      name: {{ $redis.secret }}
+      key: sentinel_port
+- name: REDIS_SENTINEL_SERVICE
+  valueFrom:
+    secretKeyRef:
+      name: {{ $redis.secret }}
+      key: sentinel_service
+- name: REDIS_USE_SENTINEL
+  value: {{ ($redis.useSentinel | default false) | quote }}
+{{- end }}
+{{- if $s3.secret }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3.secret }}
+      key: accessKeyId
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3.secret }}
+      key: secretAccessKey
+- name: AWS_BUCKET
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3.secret }}
+      key: bucket
+- name: AWS_ENDPOINT
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3.secret }}
+      key: endpoint
+- name: AWS_DEFAULT_REGION
+  value: {{ $s3.region | default "us-east-1" }}
+- name: AWS_USE_PATH_STYLE_ENDPOINT
+  value: {{ $s3.pathStyle | default "true" | quote }}
+- name: FILESYSTEM_DISK
+  value: s3
+{{- if $s3.url }}
+- name: AWS_URL
+  value: {{ $s3.url }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Render the envFrom: entries shared by every Laravel pod.
+Mounts the -defaults and -environment secrets, plus -typesense when enabled.
+*/}}
+{{- define "sail.laravelEnvFrom" -}}
+{{- $name := include "sail.name" . -}}
+{{- $typesense := dict -}}
+{{- if .main -}}
+{{- $typesense = .main.typesense | default dict -}}
+{{- else -}}
+{{- $typesense = .Values.typesense | default dict -}}
+{{- end }}
+- secretRef:
+    name: {{ $name }}-defaults
+- secretRef:
+    name: {{ $name }}-environment
+{{- if $typesense.enabled }}
+- secretRef:
+    name: {{ $typesense.secret | default (printf "%s-typesense" $name) }}
+{{- end }}
+{{- end -}}
+

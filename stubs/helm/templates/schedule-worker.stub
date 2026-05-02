@@ -23,14 +23,9 @@ spec:
               image: "{{ .Values.worker.image.repository | lower }}:{{ .Values.worker.image.tag | default .Values.global.tag | default "latest" | lower }}"
               imagePullPolicy: {{ .Values.worker.image.pullPolicy | default .Values.global.pullPolicy | default "IfNotPresent" }}
               command: ["php", "artisan", "schedule:run"]
+              env:
+                {{- include "sail.laravelEnv" . | nindent 16 }}
               envFrom:
-                - secretRef:
-                    name: {{ include "sail.name" . }}-defaults
-                - secretRef:
-                    name: {{ include "sail.name" . }}-environment
-                {{- if .Values.typesense.enabled }}
-                - secretRef:
-                    name: {{ .Values.typesense.secret | default (printf "%s-typesense" (include "sail.name" .)) }}
-                {{- end }}
+                {{- include "sail.laravelEnvFrom" . | nindent 16 }}
           restartPolicy: OnFailure
 {{- end -}}

@@ -172,12 +172,12 @@ class HelmTemplateTest extends TestCase
     {
         $out = $this->renderChart();
 
-        $this->assertSame(2, preg_match_all('/name:\s*SAIL_LOG_MODE\s*\n\s*value:\s*"both"/', $out),
-            'SAIL_LOG_MODE=both must appear in both web and worker Deployments');
-        $this->assertSame(2, preg_match_all('/name:\s*SAIL_LOG_MAX_ARCHIVES\s*\n\s*value:\s*"20"/', $out),
-            'SAIL_LOG_MAX_ARCHIVES=20 must appear in both web and worker Deployments');
-        $this->assertSame(2, preg_match_all('/name:\s*SAIL_LOG_ROTATE_SIZE\s*\n\s*value:\s*"10000000"/', $out),
-            'SAIL_LOG_ROTATE_SIZE=10000000 must appear in both web and worker Deployments');
+        // SAIL_LOG_* env vars now flow through the shared sail.laravelEnv helper
+        // and appear on web, worker, AND scheduler — three pod tiers.
+        $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_MODE\s*\n\s*value:\s*"both"/', $out),
+            'SAIL_LOG_MODE=both must appear in web, worker, and scheduler Deployments/CronJobs');
+        $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_MAX_ARCHIVES\s*\n\s*value:\s*"20"/', $out));
+        $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_ROTATE_SIZE\s*\n\s*value:\s*"10000000"/', $out));
     }
 
     public function test_sail_log_env_vars_override(): void
@@ -186,9 +186,54 @@ class HelmTemplateTest extends TestCase
             'logging' => ['mode' => 'stdout', 'maxArchives' => 5, 'maxFileSize' => 20000000],
         ]);
 
-        $this->assertSame(2, preg_match_all('/name:\s*SAIL_LOG_MODE\s*\n\s*value:\s*"stdout"/', $out));
-        $this->assertSame(2, preg_match_all('/name:\s*SAIL_LOG_MAX_ARCHIVES\s*\n\s*value:\s*"5"/', $out));
-        $this->assertSame(2, preg_match_all('/name:\s*SAIL_LOG_ROTATE_SIZE\s*\n\s*value:\s*"20000000"/', $out));
+        $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_MODE\s*\n\s*value:\s*"stdout"/', $out));
+        $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_MAX_ARCHIVES\s*\n\s*value:\s*"5"/', $out));
+        $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_ROTATE_SIZE\s*\n\s*value:\s*"20000000"/', $out));
+    }
+
+    public function test_redis_use_sentinel_defaults_false_when_secret_set(): void
+    {
+        $out = $this->renderChart(['redis' => ['secret' => 'test-redis-secret']]);
+
+        // When redis.secret is configured the env block emits REDIS_USE_SENTINEL.
+        // Default is false so existing apps don't auto-flip; the consumer opts in.
+        $this->assertSame(3, preg_match_all('/name:\s*REDIS_USE_SENTINEL\s*\n\s*value:\s*"false"/', $out),
+            'REDIS_USE_SENTINEL=false must appear on web, worker, and scheduler');
+    }
+
+    public function test_redis_use_sentinel_true_when_opted_in(): void
+    {
+        $out = $this->renderChart([
+            'redis' => ['secret' => 'test-redis-secret', 'useSentinel' => true],
+        ]);
+
+        $this->assertSame(3, preg_match_all('/name:\s*REDIS_USE_SENTINEL\s*\n\s*value:\s*"true"/', $out),
+            'REDIS_USE_SENTINEL=true must appear on web, worker, and scheduler when redis.useSentinel is true');
+    }
+
+    public function test_scheduler_now_has_db_and_redis_env_wired(): void
+    {
+        // Regression guard for the scheduler CronJob bug that caused WEBSITE-10/B/C/D:
+        // before this refactor the scheduler only had envFrom (-defaults, -environment)
+        // which left DB_HOST and REDIS_HOST unset → app fell back to 127.0.0.1 in prod.
+        // The shared sail.laravelEnv helper now wires all three tiers.
+        $out = $this->renderChart([
+            'database' => ['secret' => 'test-db-secret'],
+            'redis' => ['secret' => 'test-redis-secret'],
+        ]);
+
+        // REDIS_HOST appears on web + worker + scheduler (not presync-migrate, which
+        // doesn't talk to redis). DB_HOST appears on those three plus presync-migrate.
+        $this->assertSame(3, preg_match_all('/name:\s*REDIS_HOST/', $out));
+
+        // Targeted regression guard: the scheduler CronJob's env block must include
+        // DB_HOST and REDIS_HOST. Grab just the CronJob document and verify in isolation.
+        $this->assertMatchesRegularExpression('/kind:\s*CronJob/', $out, 'CronJob is rendered');
+        $cronjob = $this->extractDocument($out, 'CronJob');
+        $this->assertStringContainsString('DB_HOST', $cronjob,
+            'scheduler CronJob must wire DB_HOST — regression guard for WEBSITE-10');
+        $this->assertStringContainsString('REDIS_HOST', $cronjob,
+            'scheduler CronJob must wire REDIS_HOST — regression guard for WEBSITE-B/C/D');
     }
 
     public function test_default_resources_when_nothing_set(): void
@@ -215,6 +260,21 @@ class HelmTemplateTest extends TestCase
             preg_match_all('/name:\s*testapp-(?:web|worker).*?resources:.*?cpu:\s*250m/s', $out),
             'Top-level resources fallback should be rendered in both web and worker Deployments'
         );
+    }
+
+    /**
+     * Returns the YAML document with the matching `kind:` from a multi-doc helm
+     * template render. Documents are separated by `^---`.
+     */
+    private function extractDocument(string $rendered, string $kind): string
+    {
+        foreach (preg_split("/^---\s*\n/m", $rendered) as $doc) {
+            if (preg_match('/^kind:\s*'.preg_quote($kind, '/').'\b/m', $doc)) {
+                return $doc;
+            }
+        }
+
+        return '';
     }
 
     public function test_tier_resources_win_over_top_level(): void
