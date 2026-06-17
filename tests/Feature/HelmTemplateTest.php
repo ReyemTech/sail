@@ -303,6 +303,19 @@ class HelmTemplateTest extends TestCase
             'Gotenberg Deployment/Service must not render when gotenberg.enabled is false');
     }
 
+    public function test_gotenberg_renders_when_values_is_null(): void
+    {
+        // Regression: `gotenberg: null` in consumer values would panic helm template
+        // (nil pointer evaluating .Values.gotenberg.enabled) if the template didn't
+        // bind `.Values.gotenberg | default dict` before dereferencing. Mirrors the
+        // existing app:null guard. The chart must still render and simply omit gotenberg.
+        $out = $this->renderChart(['gotenberg' => null]);
+
+        $this->assertStringContainsString('kind: Deployment', $out, 'chart must still render with gotenberg: null');
+        $this->assertStringNotContainsString('testapp-gotenberg', $out,
+            'gotenberg must be omitted (not error) when its values block is null');
+    }
+
     public function test_gotenberg_url_wired_into_all_laravel_pods(): void
     {
         $out = $this->renderChart(['gotenberg' => ['enabled' => true]]);
