@@ -157,16 +157,19 @@ opt in via `redis.useSentinel: true` in values.yaml.
 {{- $redis := dict -}}
 {{- $s3 := dict -}}
 {{- $logging := dict -}}
+{{- $gotenberg := dict -}}
 {{- if .main -}}
 {{- $database = .main.database | default dict -}}
 {{- $redis = .main.redis | default dict -}}
 {{- $s3 = .main.s3 | default dict -}}
 {{- $logging = .main.logging | default dict -}}
+{{- $gotenberg = .main.gotenberg | default dict -}}
 {{- else -}}
 {{- $database = .Values.database | default dict -}}
 {{- $redis = .Values.redis | default dict -}}
 {{- $s3 = .Values.s3 | default dict -}}
 {{- $logging = .Values.logging | default dict -}}
+{{- $gotenberg = .Values.gotenberg | default dict -}}
 {{- end }}
 - name: SAIL_LOG_MODE
   value: {{ $logging.mode | default "both" | quote }}
@@ -270,6 +273,10 @@ opt in via `redis.useSentinel: true` in values.yaml.
 - name: AWS_URL
   value: {{ $s3.url }}
 {{- end }}
+{{- end }}
+{{- if $gotenberg.enabled }}
+- name: GOTENBERG_URL
+  value: {{ printf "http://%s-gotenberg:3000" (include "sail.name" .) | quote }}
 {{- end }}
 {{- end -}}
 

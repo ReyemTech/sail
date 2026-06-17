@@ -262,6 +262,81 @@ class HelmTemplateTest extends TestCase
         );
     }
 
+    public function test_gotenberg_deployment_and_service_render_when_enabled(): void
+    {
+        // values.stub ships gotenberg.enabled: true, so the baseline render
+        // already includes it; assert explicitly anyway for clarity.
+        $out = $this->renderChart(['gotenberg' => ['enabled' => true]]);
+
+        $this->assertMatchesRegularExpression(
+            '/kind:\s*Deployment\n[^-]*?name:\s*testapp-gotenberg/s',
+            $out,
+            'Expected a Deployment named testapp-gotenberg'
+        );
+        $this->assertMatchesRegularExpression(
+            '/kind:\s*Service\n[^-]*?name:\s*testapp-gotenberg/s',
+            $out,
+            'Expected a Service named testapp-gotenberg'
+        );
+
+        // Grab the gotenberg Deployment specifically. Matching on a bare substring
+        // would wrongly hit the web Deployment, whose env block contains the string
+        // "testapp-gotenberg" inside the GOTENBERG_URL value — so match the
+        // metadata name on its own line instead.
+        $gotenberg = '';
+        foreach (preg_split("/^---\s*\n/m", $out) as $doc) {
+            if (preg_match('/kind:\s*Deployment/', $doc) && preg_match('/^\s*name:\s*testapp-gotenberg\s*$/m', $doc)) {
+                $gotenberg = $doc;
+                break;
+            }
+        }
+        $this->assertStringContainsString('image: gotenberg/gotenberg:8', $gotenberg);
+        $this->assertStringContainsString('path: /health', $gotenberg);
+        $this->assertStringContainsString('containerPort: 3000', $gotenberg);
+    }
+
+    public function test_gotenberg_omitted_when_disabled(): void
+    {
+        $out = $this->renderChart(['gotenberg' => ['enabled' => false]]);
+
+        $this->assertStringNotContainsString('testapp-gotenberg', $out,
+            'Gotenberg Deployment/Service must not render when gotenberg.enabled is false');
+    }
+
+    public function test_gotenberg_renders_when_values_is_null(): void
+    {
+        // Regression: `gotenberg: null` in consumer values would panic helm template
+        // (nil pointer evaluating .Values.gotenberg.enabled) if the template didn't
+        // bind `.Values.gotenberg | default dict` before dereferencing. Mirrors the
+        // existing app:null guard. The chart must still render and simply omit gotenberg.
+        $out = $this->renderChart(['gotenberg' => null]);
+
+        $this->assertStringContainsString('kind: Deployment', $out, 'chart must still render with gotenberg: null');
+        $this->assertStringNotContainsString('testapp-gotenberg', $out,
+            'gotenberg must be omitted (not error) when its values block is null');
+    }
+
+    public function test_gotenberg_url_wired_into_all_laravel_pods(): void
+    {
+        $out = $this->renderChart(['gotenberg' => ['enabled' => true]]);
+
+        // GOTENBERG_URL flows through the shared sail.laravelEnv helper, so it
+        // appears on web, worker, and scheduler — the same three tiers as SAIL_LOG_*.
+        $this->assertSame(
+            3,
+            preg_match_all('#name:\s*GOTENBERG_URL\s*\n\s*value:\s*"http://testapp-gotenberg:3000"#', $out),
+            'GOTENBERG_URL=http://testapp-gotenberg:3000 must appear on web, worker, and scheduler'
+        );
+    }
+
+    public function test_gotenberg_url_absent_when_disabled(): void
+    {
+        $out = $this->renderChart(['gotenberg' => ['enabled' => false]]);
+
+        $this->assertSame(0, preg_match_all('/name:\s*GOTENBERG_URL/', $out),
+            'GOTENBERG_URL must not be wired into any pod when gotenberg is disabled');
+    }
+
     /**
      * Returns the YAML document with the matching `kind:` from a multi-doc helm
      * template render. Documents are separated by `^---`.

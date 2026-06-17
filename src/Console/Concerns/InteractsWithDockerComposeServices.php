@@ -41,6 +41,7 @@ trait InteractsWithDockerComposeServices
         'rabbitmq',
         'selenium',
         'soketi',
+        'gotenberg',
     ];
 
     /**
@@ -327,6 +328,10 @@ trait InteractsWithDockerComposeServices
 
         if (in_array('rabbitmq', $services)) {
             $environment = str_replace('RABBITMQ_HOST=127.0.0.1', 'RABBITMQ_HOST=rabbitmq', $environment);
+        }
+
+        if (in_array('gotenberg', $services)) {
+            $environment .= "\nGOTENBERG_URL=http://gotenberg:3000\n";
         }
 
         $environment = str_replace('# PHP_CLI_SERVER_WORKERS=4', 'PHP_CLI_SERVER_WORKERS=4', $environment);
