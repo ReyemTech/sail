@@ -4,9 +4,30 @@ namespace Laravel\Sail\Tests\Feature;
 
 use Illuminate\Support\Facades\File;
 use Laravel\Sail\Tests\TestCase;
+use Symfony\Component\Yaml\Yaml;
 
 class BuildCommandTest extends TestCase
 {
+    public function test_gotenberg_compose_stub_is_valid_and_internal_only(): void
+    {
+        $stub = realpath(__DIR__.'/../../stubs/gotenberg.stub');
+        $this->assertNotFalse($stub, 'stubs/gotenberg.stub must exist');
+
+        $parsed = Yaml::parseFile($stub);
+        $this->assertArrayHasKey('gotenberg', $parsed, 'stub must define a top-level "gotenberg" service');
+
+        $service = $parsed['gotenberg'];
+        $this->assertSame('gotenberg/gotenberg:8', $service['image']);
+        $this->assertContains('sail', $service['networks'], 'gotenberg must join the sail network');
+        $this->assertArrayHasKey('healthcheck', $service, 'gotenberg must define a /health healthcheck');
+        $this->assertStringContainsString('/health', implode(' ', $service['healthcheck']['test']));
+
+        // Stateless sidecar: no volumes (it must not appear in the volume-creation
+        // allowlist in InteractsWithDockerComposeServices either).
+        $this->assertArrayNotHasKey('volumes', $service, 'gotenberg is stateless and must not declare volumes');
+    }
+
+
     protected string $testBasePath;
 
     protected function setUp(): void

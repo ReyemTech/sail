@@ -5,6 +5,7 @@
     "secret" (.Values.secret | default dict)
     "name" (.Values.name | default "website")
     "typesense" (.Values.typesense | default dict)
+    "gotenberg" (.Values.gotenberg | default dict)
     "database" (.Values.database | default dict)
     "redis" (.Values.redis | default dict)
     "s3" (.Values.s3 | default dict)

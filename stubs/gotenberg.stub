@@ -1,0 +1,11 @@
+gotenberg:
+    image: 'gotenberg/gotenberg:8'
+    restart: unless-stopped
+    ports:
+        - '${SAIL_IP:-172.20.0.10}:${FORWARD_GOTENBERG_PORT:-3000}:3000'
+    networks:
+        - sail
+    healthcheck:
+        test: ['CMD', 'curl', '--fail', 'http://localhost:3000/health']
+        retries: 3
+        timeout: 5s

@@ -334,6 +334,15 @@ typesense:
     storageSize: 2Gi
     storageClassName: ""
 
+# Gotenberg HTML→PDF rendering sidecar (deploys Gotenberg when enabled).
+# Stateless and internal-only — no PVC, no ingress. When enabled, the web,
+# worker, and scheduler pods receive GOTENBERG_URL=http://{appname}-gotenberg:3000.
+gotenberg:
+    enabled: true
+    image: gotenberg/gotenberg:8
+    replicas: 1
+    apiTimeout: 60s
+
 # Ingress settings (e.g., for Traefik or NGINX)
 ingress:
   enabled: true
