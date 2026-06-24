@@ -36,14 +36,15 @@ From an empty `composer require` to a production image and Helm chart in four st
 
 **1. Install into your Laravel app**
 
+New Laravel apps ship with `laravel/sail` in `require-dev`. Remove it first — this fork uses the same `Laravel\Sail` namespace and **will collide** with the upstream package:
+
 ```bash
+composer remove laravel/sail         # required: new Laravel apps include it by default
 composer require reyemtech/sail --dev
 
 php artisan sail:install --php=8.4   # or --php=8.5
 php artisan sail:publish             # publish Docker runtimes, bin scripts, configs
 ```
-
-> Already running upstream `laravel/sail`? Remove it first — this fork uses the same namespace and conflicts with it.
 
 **2. Develop locally**
 
