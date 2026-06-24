@@ -43,6 +43,7 @@ services:
             - nginx_vhost:/etc/nginx/vhost.d
             - nginx_html:/usr/share/nginx/html
             - ./vendor/reyemtech/sail/certs:/etc/nginx/certs:ro,z
+            - ./vendor/reyemtech/sail/nginx-proxy/proxy-buffers.conf:/etc/nginx/conf.d/zz-proxy-buffers.conf:ro
         networks:
             - sail
 volumes:
