@@ -1,8 +1,10 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="/art/reyemtech-logo-dark.png">
-    <img width="320" src="/art/reyemtech-logo-light.png" alt="ReyemTech Sail">
+    <img height="56" src="/art/reyemtech-logo-light.png" alt="ReyemTech">
   </picture>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img height="56" src="/art/logo.svg" alt="Laravel Sail">
 </p>
 
 <p align="center">
