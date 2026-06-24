@@ -1,4 +1,9 @@
-<p align="center"><img width="294" height="69" src="/art/logo.svg" alt="ReyemTech Sail"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/art/reyemtech-logo-dark.png">
+    <img width="320" src="/art/reyemtech-logo-light.png" alt="ReyemTech Sail">
+  </picture>
+</p>
 
 <p align="center">
 <a href="https://packagist.org/packages/reyemtech/sail"><img src="https://img.shields.io/packagist/dt/reyemtech/sail" alt="Total Downloads"></a>
