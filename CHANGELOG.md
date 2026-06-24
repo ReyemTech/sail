@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.4.1](https://github.com/ReyemTech/sail/compare/v3.4.0...v3.4.1) (2026-06-24)
+
+
+### Miscellaneous Chores
+
+* merge upstream/1.x (laravel/sail v1.57.0..v1.63.0) ([7d630f9](https://github.com/ReyemTech/sail/commit/7d630f9bd3121998bbf719c77a84d85c4c5d55a0))
+
 ## [3.4.0](https://github.com/ReyemTech/sail/compare/v3.3.0...v3.4.0) (2026-06-24)
 
 
