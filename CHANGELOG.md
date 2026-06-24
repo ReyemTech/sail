@@ -1,5 +1,20 @@
 # Release Notes
 
+## [3.4.0](https://github.com/ReyemTech/sail/compare/v3.3.0...v3.4.0) (2026-06-24)
+
+
+### Features
+
+* **gotenberg:** add Gotenberg HTML→PDF sidecar across compose and helm ([db81e8d](https://github.com/ReyemTech/sail/commit/db81e8d154078994a70b8a98d781d6f5588e05fb))
+* **gotenberg:** add Gotenberg HTML→PDF sidecar across compose and Helm ([33e1455](https://github.com/ReyemTech/sail/commit/33e1455877abb8c7862254f6227b9ee24f8227df))
+
+
+### Bug Fixes
+
+* **helm:** guard nullable gotenberg values before dereferencing ([8cd0351](https://github.com/ReyemTech/sail/commit/8cd0351f25528a07b9d2def52088554f9e0fdc92))
+* raise nginx-proxy buffers to avoid 502 on large response headers ([56dc895](https://github.com/ReyemTech/sail/commit/56dc8956ffa5a141a370b8fd83f2590bc1c5a304))
+* raise nginx-proxy buffers to avoid 502 on large response headers ([af3ddb4](https://github.com/ReyemTech/sail/commit/af3ddb4bc82a22b5949ba9be00c64bc40cb5a0eb))
+
 ## [3.3.0](https://github.com/ReyemTech/sail/compare/v3.2.0...v3.3.0) (2026-05-02)
 
 
