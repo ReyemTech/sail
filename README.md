@@ -1,57 +1,123 @@
-<p align="center"><img width="294" height="69" src="/art/logo.svg" alt="Logo Laravel Sail"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/art/reyemtech-logo-dark.png">
+    <img height="56" src="/art/reyemtech-logo-light.png" alt="ReyemTech">
+  </picture>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img height="56" src="/art/logo.svg" alt="Laravel Sail">
+</p>
 
 <p align="center">
-<a href="https://packagist.org/packages/laravel/sail"><img src="https://img.shields.io/packagist/dt/laravel/sail" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/sail"><img src="https://img.shields.io/packagist/v/laravel/sail" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/sail"><img src="https://img.shields.io/packagist/l/laravel/sail" alt="License"></a>
+<a href="https://packagist.org/packages/reyemtech/sail"><img src="https://img.shields.io/packagist/dt/reyemtech/sail" alt="Total Downloads"></a>
+<a href="https://packagist.org/packages/reyemtech/sail"><img src="https://img.shields.io/packagist/v/reyemtech/sail" alt="Latest Stable Version"></a>
+<a href="https://packagist.org/packages/reyemtech/sail"><img src="https://img.shields.io/packagist/l/reyemtech/sail" alt="License"></a>
 </p>
 
 ## Introduction
 
-This fork of Laravel Sail adds:
-- Helm chart generation (with scheduler vendor PVC support)
-- Non-interactive `sail:build` flags (`--use-previous`, `--bump`, etc.)
-- Laravel Boost guideline for IDE/AI context
-- Multi-stage Docker builds (bake) shared across PHP versions (8.x/8.5)
+**ReyemTech Sail** is a fork of [Laravel Sail](https://github.com/laravel/sail) that keeps everything you already use for local development — the `sail` CLI, the `docker-compose` services, the PHP runtimes — and extends it into a **build-and-ship toolchain** for getting a Laravel app from your laptop into a Kubernetes cluster.
 
-## Quick start
+Where upstream Sail stops at local Docker, this fork adds:
+
+- **Multi-architecture image builds** (`linux/amd64` + `linux/arm64`) driven by Docker Bake, with optimized multi-stage production targets (cli/fpm).
+- **Helm chart generation** — `sail:build` and `sail:helm` emit a complete, opinionated chart (web/worker/scheduler tiers, HPA, PDBs, ingress, external secrets, pre-sync migration jobs) straight from your project.
+- **Multi-registry push with auto-authentication** — GHCR, Docker Hub, GitLab, Quay, Harbor, AWS ECR, and Azure ACR.
+- **CI/CD pipeline generation** — one command emits a ready-to-run pipeline for GitHub Actions, GitLab CI, Azure DevOps, CircleCI, AWS CodeBuild, or Travis.
+- **Non-interactive build flags** so the same commands work in CI as on your machine.
+- **Production extras baked into the chart and runtime:** Redis Sentinel-aware PHP client, Typesense subchart, and a Laravel Nightwatch agent sidecar.
+
+It is a **drop-in replacement** for `laravel/sail` — it uses the same `Laravel\Sail` namespace and conflicts with the upstream package, so install one or the other.
+
+> **Relationship to upstream:** this fork periodically merges `laravel/sail` so the local-dev experience stays current. Everything in the [Laravel Sail documentation](https://laravel.com/docs/sail) applies here too; this README focuses on what the fork adds on top.
+
+## Quickstart
+
+From an empty `composer require` to a production image and Helm chart in four steps.
+
+**1. Install into your Laravel app**
+
+New Laravel apps ship with `laravel/sail` in `require-dev`. Remove it first — this fork uses the same `Laravel\Sail` namespace and **will collide** with the upstream package:
 
 ```bash
+composer remove laravel/sail         # required: new Laravel apps include it by default
 composer require reyemtech/sail --dev
-php artisan sail:install --php=8.4   # or 8.5
-php artisan sail:publish
+
+php artisan sail:install --php=8.4   # or --php=8.5
+php artisan sail:publish             # publish Docker runtimes, bin scripts, configs
 ```
 
-## Multi-project support
-
-This fork includes a `sail-wrapper` that automatically finds and runs the nearest project's Sail script. This allows you to use `sail` from any directory when working with multiple Sail projects on the same machine.
-
-**Automatic installation**: The wrapper is automatically installed to `~/.local/bin/sail` (or `~/bin` if available) when you install or update the package via Composer.
-
-**Usage**: Simply run `sail` from any directory, and it will automatically find and execute the nearest project's `vendor/bin/sail`:
+**2. Develop locally**
 
 ```bash
-cd /path/to/project-a
-sail up -d        # Uses project-a's Sail
-
-cd /path/to/project-b
-sail artisan migrate  # Uses project-b's Sail
+./vendor/bin/sail up -d              # start the stack
+./vendor/bin/sail artisan migrate    # run migrations
+# app is now on http://localhost
 ```
 
-**Manual installation**: If automatic installation fails, you can manually install:
+Tip: install the [global `sail` wrapper](#multi-project-sail-wrapper) once and just run `sail up -d` from any project.
+
+**3. Build a production image + Helm chart**
+
+```bash
+php artisan sail:build \
+  --environments=production \
+  --architectures=linux/amd64,linux/arm64 \
+  --repository=ghcr.io \
+  --organization=acme \
+  --domains=app.example.com \
+  --push \
+  --bump=patch
+```
+
+This builds multi-arch images, pushes them to your registry (authenticating automatically), and generates a deployable Helm chart under `helm/`. See [Building images + Helm charts](#building-images--helm-charts) for every flag.
+
+**4. Wire up CI (optional)**
+
+```bash
+php artisan sail:ci --provider=github-actions
+```
+
+Emits a pipeline that runs the same build on every push and tag. See [CI/CD generation](#cicd-generation) for the other providers.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `sail:install` | Initial project setup — `docker-compose.yml`, `.env`, PHPUnit config |
+| `sail:add` | Add services to an existing installation |
+| `sail:publish` | Publish Docker runtimes, `bin` scripts, and database configs |
+| `sail:build` | Build multi-arch Docker images (optionally push) **and** generate the Helm chart |
+| `sail:helm` | Regenerate the Helm chart only, merging new keys from `values.stub` |
+| `sail:helm:validate` | Validate generated charts via `helm lint` |
+| `sail:ci` | Generate a CI/CD pipeline (GitHub Actions, GitLab, Azure, CircleCI, CodeBuild, Travis) |
+
+## Multi-project `sail` wrapper
+
+The fork ships a `sail-wrapper` that resolves and runs the **nearest** project's `vendor/bin/sail`, so a single global `sail` works across every project on your machine.
+
+It is installed automatically to `~/.local/bin/sail` (or `~/bin`) on `composer install`/`update`. Run it from anywhere:
+
+```bash
+cd /path/to/project-a && sail up -d             # uses project-a's Sail
+cd /path/to/project-b && sail artisan migrate   # uses project-b's Sail
+```
+
+Manual install, if the automatic step is skipped:
 
 ```bash
 cp vendor/reyemtech/sail/bin/sail-wrapper ~/.local/bin/sail
 chmod +x ~/.local/bin/sail
 ```
 
-**Note**: Make sure `~/.local/bin` (or `~/bin`) is in your PATH. Add to your `~/.bashrc` or `~/.zshrc`:
+Make sure the target directory is on your `PATH`:
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc
 ```
 
-## Build with bake + Helm
+## Building images + Helm charts
+
+`sail:build` builds multi-arch images via Docker Bake and generates the Helm chart in one step:
 
 ```bash
 php artisan sail:build \
@@ -67,168 +133,150 @@ php artisan sail:build \
 ```
 
 Key flags:
-- `--use-previous`: reuse the last saved config without prompts
-- `--bump=patch|minor|major|no`: bump version non-interactively
-- `--repository=none`: local-only build (disables push)
-- `--remove-vendor-node-modules`: Remove vendor/ and node_modules/ from final image (default: true)
-- `--keep-vendor-node-modules`: Keep vendor/ and node_modules/ in final image
 
-Validation:
-- Environments must be in `local, production`
-- Architectures must be in the allowed list from the package
-- Repository must be one of the known registries, `none`, or a full registry URL (e.g., `888657980245.dkr.ecr.us-east-1.amazonaws.com`)
+- `--use-previous` — reuse the last saved build config without prompting (ideal for CI)
+- `--bump=patch|minor|major|no` — bump the version non-interactively
+- `--repository=none` — local-only build (disables push)
+- `--remove-vendor-node-modules` / `--keep-vendor-node-modules` — strip or keep `vendor/` and `node_modules/` in the final image (stripped by default)
 
-### Registry Support
+Validation rules:
 
-The build command supports multiple container registries with automatic authentication:
+- Environments must be within `local, production`
+- Architectures must be in the package's allowed list
+- Repository must be a known registry shorthand, `none`, or a full registry URL (e.g. `888657980245.dkr.ecr.us-east-1.amazonaws.com`)
 
-**Standard Registries:**
-- GitHub Container Registry (`ghcr.io`)
-- Docker Hub (`docker.io`)
-- GitLab Container Registry (`registry.gitlab.com`)
-- Quay.io (`quay.io`)
-- Custom registries (any valid registry URL)
+### Registry support
+
+`sail:build` authenticates against the target registry automatically, prompting only if you are not already logged in.
+
+**Standard registries** — GitHub Container Registry (`ghcr.io`), Docker Hub (`docker.io`), GitLab (`registry.gitlab.com`), Quay (`quay.io`), Harbor, and any custom registry URL.
 
 **AWS ECR:**
+
 ```bash
 php artisan sail:build --repository=888657980245.dkr.ecr.us-east-1.amazonaws.com --push
-# Or use shorthand:
-php artisan sail:build --repository=ecr --push
-# Requires: AWS CLI configured (aws configure)
-# Environment variables: AWS_REGION, AWS_ACCOUNT_ID (optional)
+php artisan sail:build --repository=ecr --push   # shorthand
+# Requires: AWS CLI configured (aws configure). Optional: AWS_REGION, AWS_ACCOUNT_ID
 ```
 
 **Azure ACR:**
+
 ```bash
 php artisan sail:build --repository=myregistry.azurecr.io --push
-# Or use shorthand:
-php artisan sail:build --repository=azurecr --push
-# Requires: Azure CLI installed and logged in (az login)
-# Environment variable: AZURE_ACR_NAME (optional)
+php artisan sail:build --repository=azurecr --push   # shorthand
+# Requires: Azure CLI logged in (az login). Optional: AZURE_ACR_NAME
 ```
 
-The build command will automatically check if you're logged in and prompt for authentication if needed.
+## Helm
 
-## Helm Commands
+### Regenerate the chart
 
-### Regenerate Helm Chart
-
-Regenerate the Helm chart without building Docker images:
+Regenerate the Helm chart without rebuilding images:
 
 ```bash
-# Regenerate with current version
-php artisan sail:helm
-
-# Regenerate with specific version
-php artisan sail:helm --chart-version=1.2.3
-
-# Bump version and regenerate
-php artisan sail:helm --bump=patch
-
-# Skip version update in Chart.yaml
-php artisan sail:helm --no-version-update
+php artisan sail:helm                          # current version
+php artisan sail:helm --chart-version=1.2.3    # specific version
+php artisan sail:helm --bump=patch             # bump and regenerate
+php artisan sail:helm --no-version-update      # skip Chart.yaml version bump
 ```
 
-This command:
-- Updates Helm templates from stubs
-- Merges new configuration variables from `values.stub` into existing `values.yaml`
-- Updates `Chart.yaml` version (unless `--no-version-update` is used)
-- Validates the chart using `helm lint`
+This refreshes templates from the stubs, **merges new keys from `values.stub` into your existing `values.yaml`** (without clobbering your overrides), updates `Chart.yaml`, and runs `helm lint`.
 
-Useful when you need to update templates or add new configuration options without rebuilding Docker images.
-
-## Helm Chart Notes
-
-- Stubs live in `stubs/helm`
-- Scheduler vendor PVC: enabled by default (`scheduler.vendorPvc.*`), default size 5Gi, storage class `sata`
-- Resources & security defaults:
-  - `resources` requests/limits set in `values.stub`
-  - `securityContext` defaults to non-root, fsGroup 1000
-- Probes: web gets readiness/liveness on `/up`
-- **Autoscaling**: HPA enabled by default for web tier, configurable per tier
-- **Pod Disruption Budgets**: Configurable PDBs for high availability
-- **ServiceAccounts**: Optional ServiceAccount creation with annotations
-- **External Secrets**: Automatic API version detection (v1 or v1beta1)
-
-## Docker runtime
-
-- PHP 8.x bake files reside in `runtimes/8.x`
-- PHP 8.5 reuses the 8.x bake structure (`runtimes/8.5/docker-bake.hcl` targets 8.x, PHP_VERSION=8.5)
-- Multi-stage targets: base, app, production (cli/fpm)
-
-## CI/CD Integration
-
-Generate CI/CD configuration files for automated Docker builds:
+### Validate
 
 ```bash
-# Interactive selection
-php artisan sail:ci
+php artisan sail:helm:validate
+```
 
-# Direct selection
+### What the chart includes
+
+- **Tiers:** `web`, `worker`, and `scheduler` deployments, each independently configurable.
+- **Autoscaling:** HPA enabled by default for the web tier, configurable per tier.
+- **High availability:** configurable Pod Disruption Budgets.
+- **ServiceAccounts:** optional creation with annotations.
+- **External Secrets:** automatic API-version detection (`v1`/`v1beta1`).
+- **Pre-sync jobs:** ArgoCD pre-sync hooks for image existence checks and database migrations.
+- **Scheduler vendor PVC:** enabled by default (`scheduler.vendorPvc.*`), 5Gi, storage class `sata`.
+- **Probes:** web readiness/liveness on `/up`.
+- **Security defaults:** non-root `securityContext`, `fsGroup` 1000, resource requests/limits set in `values.stub`.
+- **Typesense subchart** and **Laravel Nightwatch agent sidecar** support.
+
+Stubs live in `stubs/helm`. User-owned overrides belong in `values.production.yaml`, which is never overwritten by regeneration.
+
+### Rollback
+
+```bash
+helm history <release>
+helm rollback <release> <revision>
+```
+
+## Redis Sentinel
+
+The fork ships a Sentinel-aware phpredis client (`src/Redis/`) that discovers the current master through Sentinel and retries reconnects with backoff. Wire it up through the Helm chart's Redis Sentinel env vars, or use the connector directly in your Redis config.
+
+## Docker runtimes
+
+- PHP runtimes live in `runtimes/` as Docker Bake files: `runtimes/8.x` is parameterized via `PHP_VERSION` (default `8.4`) and `runtimes/8.5` reuses the same bake structure pinned to `PHP_VERSION=8.5`.
+- Multi-stage targets: `base`, `app`, and `production` (cli/fpm).
+
+## CI/CD generation
+
+Generate a pipeline that builds images and Helm charts for your provider:
+
+```bash
+php artisan sail:ci                              # interactive
 php artisan sail:ci --provider=github-actions
 php artisan sail:ci --provider=gitlab-ci
 php artisan sail:ci --provider=azure-devops
 php artisan sail:ci --provider=circleci
 php artisan sail:ci --provider=aws-codebuild
 php artisan sail:ci --provider=travis
-
-# Overwrite existing configuration
 php artisan sail:ci --provider=github-actions --overwrite
 ```
 
-### Supported CI Platforms
+| Provider | Output |
+| --- | --- |
+| GitHub Actions | `.github/workflows/build.yml` |
+| GitLab CI/CD | `.gitlab-ci.yml` |
+| Azure DevOps | `azure-pipelines/build.yml` |
+| CircleCI | `.circleci/config.yml` |
+| AWS CodeBuild | `buildspec.yml` |
+| Travis CI | `.travis.yml` |
 
-1. **GitHub Actions** - `.github/workflows/build.yml`
-2. **GitLab CI/CD** - `.gitlab-ci.yml`
-3. **Azure DevOps Pipelines** - `azure-pipelines/build.yml`
-4. **CircleCI** - `.circleci/config.yml`
-5. **AWS CodeBuild** - `buildspec.yml`
-6. **Travis CI** - `.travis.yml`
+Every generated pipeline:
 
-All CI configurations:
-- Build on push to `main`/`master` branches
-- Build on version tags (`v*`)
-- Support multi-architecture builds (amd64, arm64)
-- Include registry authentication (ECR, ACR, standard)
-- Generate both Docker images and Helm charts
-- Extract version from git tags or generate date-based versions
+- Builds on push to `main`/`master` and on version tags (`v*`)
+- Supports multi-architecture builds (amd64, arm64)
+- Authenticates against the target registry (ECR, ACR, standard)
+- Produces both Docker images and Helm charts
+- Derives the version from git tags, falling back to a date-based version
 
-### CI Setup Requirements
+### Required secrets / variables
 
-**GitHub Actions:**
-- Secrets: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` (or `GHCR_IO_USERNAME`, `GHCR_IO_PASSWORD`)
-- For ECR: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`
-- For ACR: `AZURE_CREDENTIALS`
+| Provider | Configuration |
+| --- | --- |
+| GitHub Actions | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` (or `GHCR_IO_USERNAME`/`GHCR_IO_PASSWORD`); ECR: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`; ACR: `AZURE_CREDENTIALS` |
+| GitLab CI | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` (or `CI_REGISTRY_USER`/`CI_REGISTRY_PASSWORD`); ECR: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`; ACR: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` |
+| Azure DevOps | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`; service connections for ACR and AWS |
+| CircleCI | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`; ECR: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| AWS CodeBuild | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`; IAM role for ECR (no static credentials) |
+| Travis CI | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` |
 
-**GitLab CI:**
-- CI/CD Variables: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` (or `CI_REGISTRY_USER`, `CI_REGISTRY_PASSWORD`)
-- For ECR: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`
-- For ACR: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`
-
-**Azure DevOps:**
-- Variables: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`
-- Service connections for ACR and AWS
-
-**CircleCI:**
-- Environment Variables: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`
-- For ECR: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`
-
-**AWS CodeBuild:**
-- Environment Variables: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`
-- IAM role for ECR authentication (no credentials needed)
-
-**Travis CI:**
-- Environment Variables: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`
-
-## Rollback (Helm)
+## Development
 
 ```bash
-helm rollback <release> <revision>
-helm history <release>
+composer test                  # full suite (Orchestra Testbench)
+composer test:feature
+composer test:integration
+vendor/bin/phpstan analyse src # static analysis (PHPStan level 0)
 ```
 
-## Contributing / Security
+## Credits
 
-- Issues: https://github.com/reyemtech/sail/issues
-- Security: https://github.com/laravel/sail/security/policy
-- License: MIT
+Built on [Laravel Sail](https://github.com/laravel/sail) by Taylor Otwell and the Laravel community. ReyemTech Sail tracks upstream and layers the build/deploy tooling described above on top.
+
+## Contributing & Security
+
+- Issues: <https://github.com/reyemtech/sail/issues>
+- Upstream Sail security policy: <https://github.com/laravel/sail/security/policy>
+- License: [MIT](LICENSE.md)
