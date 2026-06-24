@@ -30,7 +30,11 @@ It is a **drop-in replacement** for `laravel/sail` — it uses the same `Laravel
 
 > **Relationship to upstream:** this fork periodically merges `laravel/sail` so the local-dev experience stays current. Everything in the [Laravel Sail documentation](https://laravel.com/docs/sail) applies here too; this README focuses on what the fork adds on top.
 
-## Installation
+## Quickstart
+
+From an empty `composer require` to a production image and Helm chart in four steps.
+
+**1. Install into your Laravel app**
 
 ```bash
 composer require reyemtech/sail --dev
@@ -39,11 +43,40 @@ php artisan sail:install --php=8.4   # or --php=8.5
 php artisan sail:publish             # publish Docker runtimes, bin scripts, configs
 ```
 
-Then bring the environment up as usual:
+> Already running upstream `laravel/sail`? Remove it first — this fork uses the same namespace and conflicts with it.
+
+**2. Develop locally**
 
 ```bash
-./vendor/bin/sail up -d
+./vendor/bin/sail up -d              # start the stack
+./vendor/bin/sail artisan migrate    # run migrations
+# app is now on http://localhost
 ```
+
+Tip: install the [global `sail` wrapper](#multi-project-sail-wrapper) once and just run `sail up -d` from any project.
+
+**3. Build a production image + Helm chart**
+
+```bash
+php artisan sail:build \
+  --environments=production \
+  --architectures=linux/amd64,linux/arm64 \
+  --repository=ghcr.io \
+  --organization=acme \
+  --domains=app.example.com \
+  --push \
+  --bump=patch
+```
+
+This builds multi-arch images, pushes them to your registry (authenticating automatically), and generates a deployable Helm chart under `helm/`. See [Building images + Helm charts](#building-images--helm-charts) for every flag.
+
+**4. Wire up CI (optional)**
+
+```bash
+php artisan sail:ci --provider=github-actions
+```
+
+Emits a pipeline that runs the same build on every push and tag. See [CI/CD generation](#cicd-generation) for the other providers.
 
 ## Commands
 
