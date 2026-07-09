@@ -563,10 +563,53 @@ YAML;
 
         [$parentIndex, $parentIndent] = $parent;
 
-        // The parent must be a block map — skip flow values like `annotations: {}`.
+        // Separate any inline value on the parent line from a trailing comment.
         $afterColon = substr($lines[$parentIndex], strpos($lines[$parentIndex], ':') + 1);
-        if (trim(preg_replace('/#.*$/', '', $afterColon)) !== '') {
-            return $text;
+        $comment = '';
+        if (preg_match('/(\s+#.*)$/', $afterColon, $match)) {
+            $comment = $match[1];
+            $afterColon = substr($afterColon, 0, -strlen($match[1]));
+        }
+        $inlineValue = trim($afterColon);
+
+        // The parent must be a block map to append a child line. A flow-style
+        // map (e.g. `service: { type: ClusterIP }`) still owns required stub
+        // defaults, so expand it to a block map that includes the missing key
+        // rather than dropping the key and rendering an invalid chart. Any
+        // other inline value (a scalar or flow list) is a type mismatch we
+        // leave untouched.
+        if ($inlineValue !== '') {
+            if ($inlineValue[0] !== '{') {
+                return $text;
+            }
+
+            $existing = Yaml::parse($inlineValue);
+
+            if (! is_array($existing) || $this->isYamlList($existing)) {
+                return $text;
+            }
+
+            // Existing keys win; only the missing key is added.
+            $merged = $existing + [$key => $value];
+            $parentKey = $parentPath[count($parentPath) - 1];
+            $expanded = rtrim(Yaml::dump([$parentKey => $merged], 10, 2, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
+
+            $expandedLines = explode("\n", $expanded);
+            foreach ($expandedLines as $i => &$line) {
+                if ($line === '') {
+                    continue;
+                }
+                $line = str_repeat(' ', $parentIndent).$line;
+                if ($i === 0 && $comment !== '') {
+                    $line .= $comment;
+                }
+            }
+            unset($line);
+
+            array_splice($lines, $parentIndex, 1, $expandedLines);
+            $inserted = true;
+
+            return implode("\n", $lines);
         }
 
         [$insertAfter, $childIndent] = $this->yamlBlockExtent($lines, $parentIndex, $parentIndent);

@@ -174,6 +174,40 @@ YAML);
         $this->assertSame('2', (string) $values['resources']['limits']['cpu']);
     }
 
+    public function test_missing_nested_key_added_when_parent_is_flow_style_map(): void
+    {
+        File::makeDirectory($this->testBasePath.'/helm', 0755, true);
+
+        File::put($this->testBasePath.'/helm/Chart.yaml', <<<'YAML'
+apiVersion: v2
+name: consumerapp
+description: consumerapp Helm Chart
+type: application
+version: 2.35.1
+appVersion: 2.35.1
+YAML);
+
+        // The consumer wrote the (stub-owned) logging block using valid
+        // flow-style YAML, supplying only `mode`. The stub also defines
+        // `maxArchives`, which is missing and must be inserted — without the
+        // fix, a flow-style parent caused the key to be silently dropped,
+        // leaving the chart rendering with an undefined value.
+        File::put($this->valuesPath(), <<<'YAML'
+name: consumerapp
+logging: { mode: both } # operator-managed
+YAML);
+
+        $this->regenerate();
+
+        $text = File::get($this->valuesPath());
+        $values = Yaml::parse($text);
+
+        $this->assertIsArray($values, 'regenerated values.yaml must remain valid YAML');
+        $this->assertSame('both', $values['logging']['mode'], 'the consumer value must win');
+        $this->assertArrayHasKey('maxArchives', $values['logging'], 'missing stub keys under a flow-style parent must be inserted');
+        $this->assertStringContainsString('# operator-managed', $text, 'the trailing comment on the parent line must survive expansion');
+    }
+
     public function test_existing_values_win_over_local_config(): void
     {
         $this->writeConsumerChart();
