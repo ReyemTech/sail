@@ -294,6 +294,7 @@ database:
     connection: mysql     # DB_CONNECTION value
 redis:
     secret: ""            # nimbus Redis replicated secret (host, port, password, uri)
+    retryAfter: 660       # REDIS_QUEUE_RETRY_AFTER — seconds a queued job may run before retry
 s3:
     secret: ""            # nimbus MinIO replicated secret (accessKeyId, secretAccessKey, bucket, endpoint)
     region: us-east-1     # AWS_DEFAULT_REGION
@@ -306,10 +307,10 @@ app:
   # LOG_CHANNEL default - stderr flows logs through php-fpm stderr to
   # the s6-log pipeline (stdout + rotated file per sail.logging.mode).
   logChannel: stderr
-  # CACHE_DRIVER / SESSION_DRIVER are only written to the defaults
+  # CACHE_STORE / SESSION_DRIVER are only written to the defaults
   # secret when redis.secret is set. Unset (file default) otherwise.
-  cacheDriver: redis
-  sessionDriver: redis
+  cacheStore: database
+  sessionDriver: database
 
 # Logging pipeline behavior (web tier nginx/php-fpm logs).
 # Worker/scheduler pods bypass s6 entirely; their logs always go to stdout.

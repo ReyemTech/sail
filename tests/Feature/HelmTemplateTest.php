@@ -116,28 +116,32 @@ class HelmTemplateTest extends TestCase
         $out = $this->renderChart();
         $data = $this->extractSecretStringData($out, 'testapp-defaults');
         $this->assertArrayHasKey('LOG_CHANNEL', $data, 'testapp-defaults Secret not found or stringData not parsed');
-        $this->assertArrayNotHasKey('CACHE_DRIVER', $data);
+        $this->assertArrayNotHasKey('CACHE_STORE', $data);
         $this->assertArrayNotHasKey('SESSION_DRIVER', $data);
     }
 
     public function test_cache_session_present_with_redis(): void
     {
-        $out = $this->renderChart(['redis' => ['secret' => 'my-redis']]);
+        // `app: null` drops the values.stub app block so the template
+        // fallbacks (database/database) are what gets asserted.
+        $out = $this->renderChart(['redis' => ['secret' => 'my-redis'], 'app' => null]);
         $data = $this->extractSecretStringData($out, 'testapp-defaults');
-        $this->assertArrayHasKey('CACHE_DRIVER', $data);
+        $this->assertArrayHasKey('CACHE_STORE', $data);
         $this->assertArrayHasKey('SESSION_DRIVER', $data);
-        $this->assertSame('redis', $data['CACHE_DRIVER']);
-        $this->assertSame('redis', $data['SESSION_DRIVER']);
+        $this->assertSame('database', $data['CACHE_STORE']);
+        $this->assertSame('database', $data['SESSION_DRIVER']);
     }
 
-    public function test_cache_driver_override(): void
+    public function test_cache_store_override(): void
     {
+        // Consumers who relied on the pre-CACHE_STORE redis defaults can pin
+        // the old behavior via app.cacheStore / app.sessionDriver in values.
         $out = $this->renderChart([
             'redis' => ['secret' => 'my-redis'],
-            'app' => ['cacheDriver' => 'database', 'sessionDriver' => 'cookie'],
+            'app' => ['cacheStore' => 'redis', 'sessionDriver' => 'cookie'],
         ]);
         $data = $this->extractSecretStringData($out, 'testapp-defaults');
-        $this->assertSame('database', $data['CACHE_DRIVER']);
+        $this->assertSame('redis', $data['CACHE_STORE']);
         $this->assertSame('cookie', $data['SESSION_DRIVER']);
     }
 
@@ -189,6 +193,24 @@ class HelmTemplateTest extends TestCase
         $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_MODE\s*\n\s*value:\s*"stdout"/', $out));
         $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_MAX_ARCHIVES\s*\n\s*value:\s*"5"/', $out));
         $this->assertSame(3, preg_match_all('/name:\s*SAIL_LOG_ROTATE_SIZE\s*\n\s*value:\s*"20000000"/', $out));
+    }
+
+    public function test_redis_queue_retry_after_default(): void
+    {
+        $out = $this->renderChart();
+
+        // REDIS_QUEUE_RETRY_AFTER is emitted unconditionally by sail.laravelEnv
+        // so consumer config/queue.php `(int) env('REDIS_QUEUE_RETRY_AFTER', 660)`
+        // is wired on web, worker, and scheduler — three pod tiers.
+        $this->assertSame(3, preg_match_all('/name:\s*REDIS_QUEUE_RETRY_AFTER\s*\n\s*value:\s*"660"/', $out),
+            'REDIS_QUEUE_RETRY_AFTER=660 must appear on web, worker, and scheduler');
+    }
+
+    public function test_redis_queue_retry_after_override(): void
+    {
+        $out = $this->renderChart(['redis' => ['retryAfter' => 1200]]);
+
+        $this->assertSame(3, preg_match_all('/name:\s*REDIS_QUEUE_RETRY_AFTER\s*\n\s*value:\s*"1200"/', $out));
     }
 
     public function test_redis_use_sentinel_defaults_false_when_secret_set(): void
