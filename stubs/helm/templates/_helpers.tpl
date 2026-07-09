@@ -177,6 +177,8 @@ opt in via `redis.useSentinel: true` in values.yaml.
   value: {{ $logging.maxArchives | default 20 | int64 | toString | quote }}
 - name: SAIL_LOG_ROTATE_SIZE
   value: {{ $logging.maxFileSize | default 10000000 | int64 | toString | quote }}
+- name: REDIS_QUEUE_RETRY_AFTER
+  value: {{ $redis.retryAfter | default 660 | int64 | toString | quote }}
 {{- if $database.secret }}
 - name: DB_CONNECTION
   value: {{ $database.connection | default "mysql" }}
