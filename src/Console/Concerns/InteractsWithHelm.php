@@ -13,6 +13,31 @@ trait InteractsWithHelm
     protected string $helmPath;
 
     /**
+     * Whether values.yaml was freshly created from the stub during this run.
+     *
+     * A freshly created file may be fully generated; a pre-existing file is
+     * consumer-owned and must be preserved (values and comments alike).
+     */
+    protected bool $valuesFileCreated = false;
+
+    /**
+     * Free-form Kubernetes maps that are consumer-owned once they exist.
+     *
+     * When the consumer's values.yaml already contains one of these maps,
+     * stub defaults are never merged into it (e.g. opinionated ingress
+     * annotations like a Traefik certresolver must not be injected).
+     *
+     * @var array<int, string>
+     */
+    protected array $consumerOwnedMapKeys = [
+        'annotations',
+        'podAnnotations',
+        'labels',
+        'nodeSelector',
+        'tolerations',
+    ];
+
+    /**
      * Build the Docker Compose file.
      *
      * @param  bool  $updateVersion  Whether to update the chart version (default: true)
@@ -29,7 +54,7 @@ trait InteractsWithHelm
         // Update chart (version update controlled by parameter)
         $this->buildHelmChart($updateVersion);
 
-        $this->buildHelmValues();
+        $this->buildHelmValues($updateVersion);
 
         // Validate Helm chart
         $this->validateHelmChart();
@@ -178,6 +203,7 @@ YAML;
                         $changes = $this->mergeValuesFile($sourceFile, $valuesYamlPath) || $changes;
                     } else {
                         copy($sourceFile, $destinationFile);
+                        $this->valuesFileCreated = true;
                         $changes = true;
                     }
                 } else {
@@ -230,9 +256,10 @@ YAML;
     /**
      * Build the Helm Values.yaml file.
      *
+     * @param  bool  $updateVersion  Whether the image tag may be updated (default: true)
      * @return void
      */
-    protected function buildHelmValues()
+    protected function buildHelmValues(bool $updateVersion = true)
     {
         $this->output->writeln('  <bg=blue;fg=black> INFO </> Updating values.yaml...');
         // Check for both cases (Values.yaml and values.yaml)
@@ -240,6 +267,13 @@ YAML;
         if (! file_exists($valuesPath)) {
             $valuesPath = $this->helmPath.'/Values.yaml';
         }
+
+        if (! $this->valuesFileCreated) {
+            $this->updateExistingHelmValues($valuesPath, $updateVersion);
+
+            return;
+        }
+
         $values = Yaml::parseFile($valuesPath);
 
         $values['name'] = $this->projectName;
@@ -281,6 +315,55 @@ YAML;
         $yaml = Yaml::dump($values, Yaml::DUMP_OBJECT_AS_MAP);
 
         file_put_contents($valuesPath, $yaml);
+        $this->output->writeln('');
+    }
+
+    /**
+     * Update a pre-existing (consumer-owned) values.yaml without destroying it.
+     *
+     * Existing values always win and comments are preserved: the file is only
+     * touched through targeted text edits (placeholder healing and, when the
+     * caller asked for a version update, the global.tag scalar). If nothing
+     * needs changing, the file is not rewritten at all.
+     */
+    protected function updateExistingHelmValues(string $valuesPath, bool $updateVersion): void
+    {
+        $text = file_get_contents($valuesPath);
+        $original = $text;
+        $values = Yaml::parse($text);
+        $values = is_array($values) ? $values : [];
+
+        $domains = explode(',', config('sail.deploy.domains', 'reyemtech.com'));
+
+        // Heal stub placeholders if any survive in the existing file.
+        $text = str_replace('<project-name>', $this->projectName, $text);
+        $text = str_replace('<host>', $domains[0], $text);
+        $text = str_replace('<path-to-secret>', config('sail.secret.path', "secret/laravel/{$this->projectName}"), $text);
+        $text = str_replace('<secret-store-name>', config('sail.secret.store', 'vault-backend'), $text);
+
+        $repository = config('sail.build.repository') ? config('sail.build.repository').'/' : '';
+        $repository .= config('sail.build.organization') ? config('sail.build.organization').'/' : '';
+        $repository .= Str::lower($this->projectName);
+
+        foreach (['web', 'worker'] as $tier) {
+            $current = $values[$tier]['image']['repository'] ?? null;
+
+            if ($current === null || str_contains($current, '<')) {
+                $text = $this->setYamlScalarInText($text, [$tier, 'image', 'repository'], "{$repository}-{$tier}");
+            }
+        }
+
+        if ($updateVersion) {
+            $text = $this->setYamlScalarInText($text, ['global', 'tag'], (string) config('sail.build.version', 'latest'));
+        }
+
+        if ($text !== $original) {
+            file_put_contents($valuesPath, $text);
+            $this->output->writeln('  <fg=green>✓</> Updated values.yaml (existing values and comments preserved)');
+        } else {
+            $this->output->writeln('  <fg=green>✓</> values.yaml unchanged (existing values and comments preserved)');
+        }
+
         $this->output->writeln('');
     }
 
@@ -352,6 +435,12 @@ YAML;
     /**
      * Merge values.stub with existing values.yaml to add new configuration variables.
      *
+     * The merge is purely additive and text-preserving: missing keys from the
+     * stub are inserted into the consumer's file as text, so existing values,
+     * ordering, and comments (including functional markers such as
+     * `# x-release-please-version`) are never touched. Free-form maps the
+     * consumer already owns (annotations, labels, etc.) are left alone.
+     *
      * @param  string  $stubPath  Path to values.stub
      * @param  string  $valuesPath  Path to values.yaml
      * @return bool Returns true if changes were made
@@ -360,59 +449,281 @@ YAML;
     {
         $stubValues = Yaml::parseFile($stubPath);
         $existingValues = Yaml::parseFile($valuesPath);
-        $changes = false;
-        $newKeys = [];
 
-        // Recursively merge stub values into existing values
-        $merged = $this->mergeArrays($existingValues, $stubValues, $changes, $newKeys);
+        if (! is_array($stubValues) || ! is_array($existingValues)) {
+            return false;
+        }
 
-        if ($changes) {
-            $yaml = Yaml::dump($merged, Yaml::DUMP_OBJECT_AS_MAP | Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK);
-            file_put_contents($valuesPath, $yaml);
+        $missing = $this->collectMissingValues($existingValues, $stubValues);
 
-            if (! empty($newKeys)) {
-                $this->output->writeln('  <fg=green>✓</> Added new configuration variables: '.implode(', ', array_slice($newKeys, 0, 5)));
-                if (count($newKeys) > 5) {
-                    $this->output->writeln('    ... and '.(count($newKeys) - 5).' more');
-                }
+        if (empty($missing)) {
+            return false;
+        }
+
+        $text = file_get_contents($valuesPath);
+        $addedKeys = [];
+
+        foreach ($missing as [$path, $value]) {
+            $inserted = false;
+            $text = $this->insertYamlKey($text, $path, $value, $inserted);
+
+            if ($inserted) {
+                $addedKeys[] = implode('.', $path);
             }
         }
 
-        return $changes;
+        if (empty($addedKeys)) {
+            return false;
+        }
+
+        file_put_contents($valuesPath, $text);
+
+        $this->output->writeln('  <fg=green>✓</> Added new configuration variables from values.stub:');
+        foreach ($addedKeys as $addedKey) {
+            $this->output->writeln('    - '.$addedKey);
+        }
+
+        return true;
     }
 
     /**
-     * Recursively merge two arrays, adding new keys from source to target.
+     * Collect stub keys missing from the consumer's values.
      *
-     * @param  array  $target  Existing values (target)
-     * @param  array  $source  Stub values (source)
-     * @param  bool  &$changes  Reference to track if changes were made
-     * @param  array  &$newKeys  Reference to track new keys added (optional)
-     * @param  string  $prefix  Prefix for tracking nested keys (internal use)
-     * @return array Merged array
+     * Existing keys always win — scalars are never overwritten, lists are
+     * never merged into, and consumer-owned free-form maps (annotations and
+     * friends) are never extended with stub defaults. When an entire subtree
+     * is missing, one entry with the full subtree is returned.
+     *
+     * @param  array  $target  Existing values
+     * @param  array  $source  Stub values
+     * @param  array<int, string>  $path  Current key path (internal use)
+     * @return array<int, array{0: array<int, string>, 1: mixed}> List of [path, value] additions
      */
-    protected function mergeArrays(array $target, array $source, bool &$changes, array &$newKeys = [], string $prefix = ''): array
+    protected function collectMissingValues(array $target, array $source, array $path = []): array
     {
-        foreach ($source as $key => $value) {
-            $fullKey = $prefix ? $prefix.'.'.$key : $key;
+        $missing = [];
 
-            if (! isset($target[$key])) {
-                // Key doesn't exist in target, add it from source
-                $target[$key] = $value;
-                $changes = true;
-                $newKeys[] = $fullKey;
-            } elseif (is_array($value) && is_array($target[$key])) {
-                // Both are arrays, recursively merge
-                $originalTarget = $target[$key];
-                $target[$key] = $this->mergeArrays($target[$key], $value, $changes, $newKeys, $fullKey);
-                // Check if the merge actually changed anything
-                if ($target[$key] !== $originalTarget) {
-                    $changes = true;
-                }
+        foreach ($source as $key => $value) {
+            $keyPath = array_merge($path, [(string) $key]);
+
+            if (! array_key_exists($key, $target)) {
+                $missing[] = [$keyPath, $value];
+            } elseif (is_array($value) && is_array($target[$key])
+                && ! in_array($key, $this->consumerOwnedMapKeys, true)
+                && ! $this->isYamlList($value) && ! $this->isYamlList($target[$key])) {
+                $missing = array_merge($missing, $this->collectMissingValues($target[$key], $value, $keyPath));
             }
-            // If key exists and is not an array, preserve existing value (don't overwrite)
         }
 
-        return $target;
+        return $missing;
+    }
+
+    /**
+     * Determine whether a parsed YAML array is a sequence (list) rather than a map.
+     */
+    protected function isYamlList(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
+    }
+
+    /**
+     * Insert a missing key (with its subtree) into YAML text without
+     * re-emitting the document, so existing content and comments survive.
+     *
+     * Top-level keys are appended to the end of the file; nested keys are
+     * inserted at the end of their parent block with matching indentation.
+     * If the parent cannot be located as a block map, the text is returned
+     * unchanged and $inserted stays false.
+     *
+     * @param  string  $text  Original YAML text
+     * @param  array<int, string>  $path  Full key path to insert
+     * @param  mixed  $value  Parsed value for the key
+     * @param  bool  &$inserted  Set to true when the insertion succeeded
+     */
+    protected function insertYamlKey(string $text, array $path, $value, bool &$inserted): string
+    {
+        $inserted = false;
+        $key = $path[count($path) - 1];
+        $parentPath = array_slice($path, 0, -1);
+
+        $block = rtrim(Yaml::dump([$key => $value], 10, 2, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
+
+        if (empty($parentPath)) {
+            $inserted = true;
+
+            return rtrim($text, "\n")."\n\n".$block."\n";
+        }
+
+        $lines = explode("\n", $text);
+        $parent = $this->findYamlKeyLine($lines, $parentPath);
+
+        if ($parent === null) {
+            return $text;
+        }
+
+        [$parentIndex, $parentIndent] = $parent;
+
+        // The parent must be a block map — skip flow values like `annotations: {}`.
+        $afterColon = substr($lines[$parentIndex], strpos($lines[$parentIndex], ':') + 1);
+        if (trim(preg_replace('/#.*$/', '', $afterColon)) !== '') {
+            return $text;
+        }
+
+        [$insertAfter, $childIndent] = $this->yamlBlockExtent($lines, $parentIndex, $parentIndent);
+
+        $indentedBlock = array_map(function ($line) use ($childIndent) {
+            return $line === '' ? '' : str_repeat(' ', $childIndent).$line;
+        }, explode("\n", $block));
+
+        array_splice($lines, $insertAfter + 1, 0, $indentedBlock);
+        $inserted = true;
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Locate the line holding the key at the given path.
+     *
+     * @param  array<int, string>  $lines  YAML text split into lines
+     * @param  array<int, string>  $path  Key path to locate
+     * @return array{0: int, 1: int}|null [line index, indent] or null when not found
+     */
+    protected function findYamlKeyLine(array $lines, array $path): ?array
+    {
+        $start = 0;
+        $end = count($lines);
+        $parentIndent = -1;
+        $lastSegment = count($path) - 1;
+
+        foreach ($path as $depth => $segment) {
+            $levelIndent = null;
+            $foundIndex = null;
+
+            for ($i = $start; $i < $end; $i++) {
+                $trimmed = ltrim($lines[$i]);
+
+                if ($trimmed === '' || $trimmed[0] === '#') {
+                    continue;
+                }
+
+                $indent = strlen($lines[$i]) - strlen($trimmed);
+
+                if ($indent <= $parentIndent) {
+                    break;
+                }
+
+                if ($levelIndent === null) {
+                    $levelIndent = $indent;
+                }
+
+                if ($indent === $levelIndent && $this->yamlLineMatchesKey($trimmed, $segment)) {
+                    $foundIndex = $i;
+                    break;
+                }
+            }
+
+            if ($foundIndex === null || $levelIndent === null) {
+                return null;
+            }
+
+            if ($depth === $lastSegment) {
+                return [$foundIndex, $levelIndent];
+            }
+
+            $start = $foundIndex + 1;
+            $parentIndent = $levelIndent;
+
+            for ($i = $start; $i < $end; $i++) {
+                $trimmed = ltrim($lines[$i]);
+
+                if ($trimmed === '') {
+                    continue;
+                }
+
+                if ((strlen($lines[$i]) - strlen($trimmed)) <= $parentIndent) {
+                    $end = $i;
+                    break;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine the extent of a block map for insertion purposes.
+     *
+     * @param  array<int, string>  $lines  YAML text split into lines
+     * @param  int  $parentIndex  Line index of the parent key
+     * @param  int  $parentIndent  Indent of the parent key
+     * @return array{0: int, 1: int} [last content line of the block, child indent]
+     */
+    protected function yamlBlockExtent(array $lines, int $parentIndex, int $parentIndent): array
+    {
+        $lastContent = $parentIndex;
+        $childIndent = null;
+        $total = count($lines);
+
+        for ($i = $parentIndex + 1; $i < $total; $i++) {
+            $trimmed = ltrim($lines[$i]);
+
+            if ($trimmed === '') {
+                continue;
+            }
+
+            $indent = strlen($lines[$i]) - strlen($trimmed);
+
+            if ($indent <= $parentIndent) {
+                break;
+            }
+
+            if ($childIndent === null && $trimmed[0] !== '#') {
+                $childIndent = $indent;
+            }
+
+            $lastContent = $i;
+        }
+
+        return [$lastContent, $childIndent ?? $parentIndent + 2];
+    }
+
+    /**
+     * Determine whether a trimmed YAML line declares the given key.
+     */
+    protected function yamlLineMatchesKey(string $trimmedLine, string $key): bool
+    {
+        $quoted = preg_quote($key, '/');
+
+        return (bool) preg_match('/^(?:'.$quoted.'|"'.$quoted.'"|\''.$quoted.'\')\s*:/', $trimmedLine);
+    }
+
+    /**
+     * Replace the scalar value of the key at the given path in YAML text,
+     * preserving indentation and any trailing inline comment (such as the
+     * `# x-release-please-version` marker release automation relies on).
+     *
+     * @param  array<int, string>  $path  Key path whose scalar should be replaced
+     */
+    protected function setYamlScalarInText(string $text, array $path, string $value): string
+    {
+        $lines = explode("\n", $text);
+        $located = $this->findYamlKeyLine($lines, $path);
+
+        if ($located === null) {
+            return $text;
+        }
+
+        [$index] = $located;
+
+        if (preg_match('/^(\s*(?:"[^"]+"|\'[^\']+\'|[^:#]+?)\s*:\s*)([^#]*?)(\s*#.*)?$/', $lines[$index], $matches)) {
+            if (trim($matches[2]) === '') {
+                // Key holds a nested block, not a scalar — leave it alone.
+                return $text;
+            }
+
+            $lines[$index] = $matches[1].$value.($matches[3] ?? '');
+        }
+
+        return implode("\n", $lines);
     }
 }
