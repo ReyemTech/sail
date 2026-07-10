@@ -1,5 +1,19 @@
 # Release Notes
 
+## [3.4.2](https://github.com/ReyemTech/sail/compare/v3.4.1...v3.4.2) (2026-07-10)
+
+
+### Bug Fixes
+
+* **helm:** expand flow-style parent maps when merging stub defaults ([29a2256](https://github.com/ReyemTech/sail/commit/29a22565394c0a23ce9cb08184fd7bba59d75cdf))
+* **helm:** expand flow-style parent maps when merging stub defaults ([d7c87ae](https://github.com/ReyemTech/sail/commit/d7c87ae6dab0532f0f64d06e2f6778d70763b1ea))
+* **helm:** preserve consumer values.yaml during chart regeneration ([633ba54](https://github.com/ReyemTech/sail/commit/633ba54da65bb990af2251978a4ca1ad50fbaa99))
+* **helm:** preserve consumer values.yaml during chart regeneration ([2733b86](https://github.com/ReyemTech/sail/commit/2733b86c57a29e73700517d844ae083e4051ac65)), closes [#20](https://github.com/ReyemTech/sail/issues/20)
+* **helm:** wire REDIS_QUEUE_RETRY_AFTER and modernize cache/session defaults ([36bbd1f](https://github.com/ReyemTech/sail/commit/36bbd1fa7b54b0eb5184f8570b851c39a49f71e6))
+* **helm:** wire REDIS_QUEUE_RETRY_AFTER and modernize cache/session defaults ([ec49b35](https://github.com/ReyemTech/sail/commit/ec49b35ecfb320a5547c7f730e4daa7e26a748ab))
+* sail up should not restart a running stack and must propagate compose exit code ([5e20d03](https://github.com/ReyemTech/sail/commit/5e20d03e9abf8621ab4fac32501c8b5959f89a68))
+* sail up should not restart a running stack and must propagate compose exit code ([bc1f8de](https://github.com/ReyemTech/sail/commit/bc1f8de3a5a33bd786b5fc0e29c19b3e21d0894a))
+
 ## [3.4.1](https://github.com/ReyemTech/sail/compare/v3.4.0...v3.4.1) (2026-06-24)
 
 
