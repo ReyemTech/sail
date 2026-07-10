@@ -356,13 +356,9 @@ elif [ "$1" == "up" ]; then
         echo "Docker image $ORG/$APP_NAME:$VERSION already exists. Skipping build." >&2
     fi
 
-    if [ "$EXEC" == "yes" ]; then
-        docker compose restart "$@"
-    else
-        docker compose up "$@"
-    fi
+    docker compose up "$@"
 
-    exit 1
+    exit $?
 
 
 # Proxy vendor binary commands on the application container...
