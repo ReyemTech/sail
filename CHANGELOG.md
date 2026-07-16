@@ -1,5 +1,13 @@
 # Release Notes
 
+## [3.4.3](https://github.com/ReyemTech/sail/compare/v3.4.2...v3.4.3) (2026-07-16)
+
+
+### Bug Fixes
+
+* **nginx:** raise FastCGI header buffers past the 4k default ([9d1306d](https://github.com/ReyemTech/sail/commit/9d1306d9daf7e0810ead99d6d2f5ef416eec3dbd))
+* **nginx:** raise FastCGI header buffers past the 4k default ([f27fe96](https://github.com/ReyemTech/sail/commit/f27fe9650f525de9b6a652750c3430986eb730d9))
+
 ## [3.4.2](https://github.com/ReyemTech/sail/compare/v3.4.1...v3.4.2) (2026-07-10)
 
 
