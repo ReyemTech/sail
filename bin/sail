@@ -337,11 +337,22 @@ elif [ "$1" == "up" ]; then
         if [ -f .env ]; then
             DOMAIN=$(grep -E '^APP_URL=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
         fi
+        SAIL_MODE=""
+        if [ -f .env ]; then
+            SAIL_MODE=$(grep -E '^SAIL_NETWORK_MODE=' .env | cut -d '=' -f2 | tr -d '"')
+        fi
+        SAIL_MODE=${SAIL_MODE:-local}
+        SAIL_HOME_DIR=${SAIL_HOME:-"$HOME/.config/sail"}
+        if [ "$SAIL_MODE" = "lan" ]; then
+            CERT_CHECK_DIR="$SAIL_HOME_DIR/certs"
+        else
+            CERT_CHECK_DIR="$RUNTIME_DIR/certs"
+        fi
         if [ ! -d "$RUNTIME_DIR/certs" ]; then
             NEEDS_SETUP=1
         elif [ ! -f "$RUNTIME_DIR/certs/mkcert-rootCA.pem" ]; then
             NEEDS_SETUP=1
-        elif [ -n "$DOMAIN" ] && [ ! -f "$RUNTIME_DIR/certs/$DOMAIN.crt" ]; then
+        elif [ -n "$DOMAIN" ] && [ ! -f "$CERT_CHECK_DIR/$DOMAIN.crt" ]; then
             NEEDS_SETUP=1
         elif [ -f .env ] && { grep -q '^SAIL_BIND_IP=' .env || grep -q '^SAIL_IP=' .env; } && grep -q "^APP_URL=" .env; then
             # Check if IP alias might be needed (setup handles this idempotently)
