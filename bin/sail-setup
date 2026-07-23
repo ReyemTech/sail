@@ -2,7 +2,12 @@
 
 UNAMEOUT="$(uname -s)"
 DOMAIN=$(grep -E '^APP_URL=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
-SAIL_IP=$(grep -E '^SAIL_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+SAIL_IP=$(grep -E '^SAIL_BIND_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+if [ -z "$SAIL_IP" ]; then
+    SAIL_IP=$(grep -E '^SAIL_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+fi
+SAIL_NETWORK_MODE=$(grep -E '^SAIL_NETWORK_MODE=' .env | cut -d '=' -f2 | tr -d '"')
+SAIL_NETWORK_MODE=${SAIL_NETWORK_MODE:-local}
 
 # Verify operating system is supported...
 case "${UNAMEOUT}" in
@@ -205,7 +210,11 @@ function link_application {
 
 install_brew
 install_docker
-add_hosts_entry
+if [ "$SAIL_NETWORK_MODE" = "local" ]; then
+    add_hosts_entry
+else
+    echo "${GREEN}LAN mode: skipping loopback alias and /etc/hosts (binding ${SAIL_IP}, domain ${DOMAIN}).${NC}" >&2
+fi
 generate_certificates
 # link_application
 
