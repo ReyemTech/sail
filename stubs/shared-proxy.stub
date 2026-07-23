@@ -1,0 +1,16 @@
+name: sail-shared-proxy
+services:
+    nginx-proxy:
+        image: nginxproxy/nginx-proxy:alpine
+        restart: unless-stopped
+        ports:
+            - "__BIND_IP__:80:80"
+            - "__BIND_IP__:443:443"
+        volumes:
+            - /var/run/docker.sock:/tmp/docker.sock:ro
+            - __CERTS_DIR__:/etc/nginx/certs:ro
+        networks:
+            - __NETWORK__
+networks:
+    __NETWORK__:
+        external: true
