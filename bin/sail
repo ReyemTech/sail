@@ -314,10 +314,15 @@ elif [ "$1" == "build" ]; then
 elif [ "$1" == "up" ]; then
     shift 1
 
-    ORG=$(grep -m 1 '^SAIL_BUILD_ORGANIZATION=' .env | cut -d '=' -f2 || echo "default")
-    APP_NAME=$(grep -m 1 '^APP_NAME=' .env | cut -d '=' -f2 | awk '{print tolower($0)}' || echo "default")
-    VERSION=$(grep -m 1 '^SAIL_BUILD_VERSION=' .env | cut -d '=' -f2 | tr -d '"' || echo "default")
-    APP_DIR=$(realpath)
+    # Note: a `grep | cut` pipeline exits 0 (from cut) even when grep finds
+    # nothing, so `|| echo default` never fires — default with `${VAR:-...}`.
+    ORG=$(grep -m 1 '^SAIL_BUILD_ORGANIZATION=' .env | cut -d '=' -f2 | tr -d '"')
+    ORG=${ORG:-default}
+    APP_NAME=$(grep -m 1 '^APP_NAME=' .env | cut -d '=' -f2 | tr -d '"' | awk '{print tolower($0)}')
+    APP_NAME=${APP_NAME:-laravel}
+    VERSION=$(grep -m 1 '^SAIL_BUILD_VERSION=' .env | cut -d '=' -f2 | tr -d '"')
+    VERSION=${VERSION:-latest}
+    APP_DIR=$(realpath .)
     RUNTIME_DIR=$(realpath vendor/reyemtech/sail/runtimes/8.x)
 
     # Auto-heal: ensure per-machine networking is configured (fresh clone / upgrade)...
