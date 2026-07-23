@@ -23,7 +23,7 @@ class ProxyCommand extends Command
         return match ($this->argument('action')) {
             'up' => $this->up($home, $stack),
             'down' => $this->down($stack),
-            'status' => $this->status($home, $stack),
+            'status' => $this->status($stack),
             default => $this->invalidAction(),
         };
     }
@@ -45,19 +45,25 @@ class ProxyCommand extends Command
 
     private function down(string $stack): int
     {
-        if (is_file($stack)) {
-            $this->runProcess(['docker', 'compose', '-f', $stack, 'down']);
+        if (! is_file($stack)) {
+            $this->components->info('Shared proxy is not running.');
+
+            return self::SUCCESS;
         }
+
+        $this->runProcess(['docker', 'compose', '-f', $stack, 'down']);
 
         $this->components->info('Shared proxy stopped.');
 
         return self::SUCCESS;
     }
 
-    private function status(SailHome $home, string $stack): int
+    private function status(string $stack): int
     {
         $this->components->twoColumnDetail('Stack file', is_file($stack) ? $stack : '(not written)');
-        $this->components->twoColumnDetail('Shared network', 'sail-shared');
+
+        $exists = $this->processSucceeds(['docker', 'network', 'inspect', 'sail-shared']);
+        $this->components->twoColumnDetail('Shared network (sail-shared)', $exists ? 'present' : 'absent');
 
         return self::SUCCESS;
     }
@@ -88,5 +94,14 @@ class ProxyCommand extends Command
         });
 
         return $process->getExitCode() ?? 1;
+    }
+
+    protected function processSucceeds(array $cmd): bool
+    {
+        $process = new Process($cmd);
+        $process->setTimeout(null);
+        $process->run(); // quiet — do NOT stream output (avoid dumping docker inspect JSON)
+
+        return $process->getExitCode() === 0;
     }
 }

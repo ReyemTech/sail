@@ -51,4 +51,30 @@ class ProxyCommandTest extends TestCase
         $this->assertStringContainsString('network create sail-shared', $cmds);
         $this->assertStringContainsString('compose -f '.$stack.' up -d', $cmds);
     }
+
+    public function test_status_reports_network_present(): void
+    {
+        $this->app->bind(\Laravel\Sail\Console\ProxyCommand::class, function () {
+            return new class extends \Laravel\Sail\Console\ProxyCommand {
+                protected function processSucceeds(array $cmd): bool { return true; }
+            };
+        });
+
+        $this->artisan('sail:proxy', ['action' => 'status'])
+            ->expectsOutputToContain('present')
+            ->assertSuccessful();
+    }
+
+    public function test_status_reports_network_absent(): void
+    {
+        $this->app->bind(\Laravel\Sail\Console\ProxyCommand::class, function () {
+            return new class extends \Laravel\Sail\Console\ProxyCommand {
+                protected function processSucceeds(array $cmd): bool { return false; }
+            };
+        });
+
+        $this->artisan('sail:proxy', ['action' => 'status'])
+            ->expectsOutputToContain('absent')
+            ->assertSuccessful();
+    }
 }
