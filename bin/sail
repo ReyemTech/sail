@@ -305,6 +305,14 @@ elif [ "$1" == "up" ]; then
     APP_DIR=$(realpath)
     RUNTIME_DIR=$(realpath vendor/reyemtech/sail/runtimes/8.x)
 
+    # Auto-heal: ensure per-machine networking is configured (fresh clone / upgrade)...
+    # sail:network is a host-side command (writes .env) and must run on the host
+    # BEFORE containers start — never via `sail artisan`, which needs a running container.
+    if [ -f .env ] && ! grep -q '^SAIL_BIND_IP=' .env; then
+        echo "${YELLOW}Configuring Sail networking (sail:network)...${NC}" >&2
+        php artisan sail:network >/dev/null 2>&1 || true
+    fi
+
     # Run sail-setup before bringing containers up if needed
     # Skip if SAIL_SKIP_SETUP is set
     if [ -z "${SAIL_SKIP_SETUP:-}" ] && [ -f vendor/bin/sail-setup ]; then
@@ -314,30 +322,37 @@ elif [ "$1" == "up" ]; then
             NEEDS_SETUP=1
         elif [ ! -f "$RUNTIME_DIR/certs/mkcert-rootCA.pem" ]; then
             NEEDS_SETUP=1
-        elif [ -f .env ] && grep -q "^SAIL_IP=" .env && grep -q "^APP_URL=" .env; then
+        elif [ -f .env ] && { grep -q '^SAIL_BIND_IP=' .env || grep -q '^SAIL_IP=' .env; } && grep -q "^APP_URL=" .env; then
             # Check if IP alias might be needed (setup handles this idempotently)
             DOMAIN=$(grep -E '^APP_URL=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
-            SAIL_IP=$(grep -E '^SAIL_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+            SAIL_IP=$(grep -E '^SAIL_BIND_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+            if [ -z "$SAIL_IP" ]; then
+                SAIL_IP=$(grep -E '^SAIL_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+            fi
+            SAIL_MODE=$(grep -E '^SAIL_NETWORK_MODE=' .env | cut -d '=' -f2 | tr -d '"')
+            SAIL_MODE=${SAIL_MODE:-local}
             if [ -n "$DOMAIN" ] && [ -n "$SAIL_IP" ]; then
-                # Check if hosts entry exists
-                if ! grep -q "$SAIL_IP.*$DOMAIN" /etc/hosts 2>/dev/null; then
-                    NEEDS_SETUP=1
-                fi
-
-                # Check if IP alias exists on network interface
-                IP_ALIAS_EXISTS=0
-                if [ "$MACHINE" == "mac" ]; then
-                    if ifconfig lo0 2>/dev/null | grep -q "$SAIL_IP"; then
-                        IP_ALIAS_EXISTS=1
+                if [ "$SAIL_MODE" = "local" ]; then
+                    # Check if hosts entry exists
+                    if ! grep -q "$SAIL_IP.*$DOMAIN" /etc/hosts 2>/dev/null; then
+                        NEEDS_SETUP=1
                     fi
-                elif [ "$MACHINE" == "linux" ]; then
-                    if ip addr show dev lo 2>/dev/null | grep -q "$SAIL_IP"; then
-                        IP_ALIAS_EXISTS=1
-                    fi
-                fi
 
-                if [ "$IP_ALIAS_EXISTS" -eq 0 ]; then
-                    NEEDS_SETUP=1
+                    # Check if IP alias exists on network interface
+                    IP_ALIAS_EXISTS=0
+                    if [ "$MACHINE" == "mac" ]; then
+                        if ifconfig lo0 2>/dev/null | grep -q "$SAIL_IP"; then
+                            IP_ALIAS_EXISTS=1
+                        fi
+                    elif [ "$MACHINE" == "linux" ]; then
+                        if ip addr show dev lo 2>/dev/null | grep -q "$SAIL_IP"; then
+                            IP_ALIAS_EXISTS=1
+                        fi
+                    fi
+
+                    if [ "$IP_ALIAS_EXISTS" -eq 0 ]; then
+                        NEEDS_SETUP=1
+                    fi
                 fi
             fi
         fi
