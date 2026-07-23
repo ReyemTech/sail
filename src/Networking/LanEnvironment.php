@@ -15,11 +15,11 @@ class LanEnvironment
 
     public function domain(): string
     {
-        if ($this->resolver !== 'nip') {
-            throw new InvalidArgumentException("Unsupported resolver [{$this->resolver}]; only 'nip' is supported in this release.");
-        }
-
-        return $this->slug($this->project).'.'.str_replace('.', '-', $this->bindIp).'.nip.io';
+        return match ($this->resolver) {
+            'nip' => $this->slug($this->project).'.'.str_replace('.', '-', $this->bindIp).'.nip.io',
+            'mdns' => $this->slug($this->project).'.local',
+            default => throw new InvalidArgumentException("Unsupported resolver [{$this->resolver}]; supported: 'nip', 'mdns'."),
+        };
     }
 
     /**

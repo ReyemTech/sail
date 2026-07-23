@@ -33,9 +33,28 @@ class LanEnvironmentTest extends TestCase
         $this->assertSame('lan', $values['COMPOSE_PROFILES']);
     }
 
+    public function test_builds_mdns_local_domain_without_ip(): void
+    {
+        $env = new LanEnvironment('My App_v2', '192.168.1.50', 'mdns');
+        $this->assertSame('my-app-v2.local', $env->domain());
+    }
+
+    public function test_mdns_values_wire_local_domain_and_resolver(): void
+    {
+        $values = (new LanEnvironment('myproj', '192.168.1.50', 'mdns'))->values();
+
+        $this->assertSame('192.168.1.50', $values['SAIL_BIND_IP']);
+        $this->assertSame('myproj.local', $values['SAIL_DOMAIN']);
+        $this->assertSame('https://myproj.local', $values['APP_URL']);
+        $this->assertSame('https://myproj.local/vite', $values['VITE_DEV_SERVER_URL']);
+        $this->assertSame('lan', $values['SAIL_NETWORK_MODE']);
+        $this->assertSame('mdns', $values['SAIL_RESOLVER']);
+        $this->assertSame('lan', $values['COMPOSE_PROFILES']);
+    }
+
     public function test_rejects_unsupported_resolver(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        (new LanEnvironment('myproj', '192.168.1.50', 'mdns'))->domain();
+        (new LanEnvironment('myproj', '192.168.1.50', 'manual'))->domain();
     }
 }
