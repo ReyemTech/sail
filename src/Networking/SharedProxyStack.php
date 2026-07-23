@@ -22,9 +22,11 @@ class SharedProxyStack
         ]);
     }
 
-    public function projectOverride(?string $network = null): string
+    public function projectOverride(?string $network = null, bool $mdns = false): string
     {
         $network = $network ?: $this->network;
+
+        $avahi = $mdns ? $this->avahiSidecar() : '';
 
         return <<<YAML
         services:
@@ -34,10 +36,31 @@ class SharedProxyStack
             laravel:
                 networks:
                     - sail
-                    - {$network}
+                    - {$network}{$avahi}
         networks:
             {$network}:
                 external: true
+        YAML;
+    }
+
+    /**
+     * A host-networked sidecar that advertises SAIL_DOMAIN -> SAIL_BIND_IP over
+     * mDNS via the HOST's avahi-daemon (requires avahi-daemon running on the
+     * host; the socket + dbus are mounted in). Only emitted when resolver=mdns.
+     * SAIL_DOMAIN / SAIL_BIND_IP are interpolated from .env at compose time.
+     */
+    private function avahiSidecar(): string
+    {
+        return <<<YAML
+
+            avahi-publish:
+                image: alpine:3
+                restart: unless-stopped
+                network_mode: host
+                command: sh -c "apk add --no-cache avahi-tools >/dev/null 2>&1 && exec avahi-publish -a -R \${SAIL_DOMAIN} \${SAIL_BIND_IP}"
+                volumes:
+                    - /var/run/dbus:/var/run/dbus
+                    - /var/run/avahi-daemon:/var/run/avahi-daemon
         YAML;
     }
 }

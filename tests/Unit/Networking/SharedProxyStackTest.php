@@ -32,4 +32,27 @@ class SharedProxyStackTest extends TestCase
         $this->assertContains('sail-shared', $parsed['services']['laravel']['networks']);
         $this->assertTrue($parsed['networks']['sail-shared']['external']);
     }
+
+    public function test_project_override_omits_avahi_sidecar_by_default(): void
+    {
+        $yaml = (new SharedProxyStack('192.168.1.50', '/x/certs'))->projectOverride();
+        $parsed = Yaml::parse($yaml);
+
+        $this->assertArrayNotHasKey('avahi-publish', $parsed['services']);
+    }
+
+    public function test_project_override_emits_avahi_sidecar_when_mdns(): void
+    {
+        $yaml = (new SharedProxyStack('192.168.1.50', '/x/certs'))->projectOverride(null, true);
+        $parsed = Yaml::parse($yaml);
+
+        $svc = $parsed['services']['avahi-publish'];
+        $this->assertSame('host', $svc['network_mode']);
+        $this->assertContains('/var/run/dbus:/var/run/dbus', $svc['volumes']);
+        $this->assertContains('/var/run/avahi-daemon:/var/run/avahi-daemon', $svc['volumes']);
+        // The advertised name + address come from .env at compose time.
+        $this->assertStringContainsString('avahi-publish -a -R ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $yaml);
+        // The mdns sidecar is host-networked, so it must NOT join the shared network.
+        $this->assertArrayNotHasKey('networks', $svc);
+    }
 }
