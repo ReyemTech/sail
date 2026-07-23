@@ -86,4 +86,18 @@ class NetworkLanSharedTest extends TestCase
         $this->assertStringContainsString('SAIL_BIND_IP="192.168.9.9"', $env);
         $this->assertStringContainsString('alpha.192-168-9-9.nip.io', $env);
     }
+
+    public function test_lan_reuses_stored_custom_domain_on_bare_rerun(): void
+    {
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_BIND_IP=192.168.9.9\nSAIL_DOMAIN=custom.example.com\n");
+
+        // Bare re-run (as the bin/sail heal does): no --ip, no --domain.
+        $this->artisan('sail:network', ['--mode' => 'lan'])->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        // Custom domain preserved, NOT reverted to nip.io.
+        $this->assertStringContainsString('SAIL_DOMAIN="custom.example.com"', $env);
+        $this->assertStringContainsString('APP_URL="https://custom.example.com"', $env);
+        $this->assertStringNotContainsString('nip.io', $env);
+    }
 }

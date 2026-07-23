@@ -155,6 +155,9 @@ class HostRegistry
             throw new \RuntimeException("Failed to write registry temp file [{$tmp}].");
         }
 
-        rename($tmp, $this->path);
+        if (! rename($tmp, $this->path)) {
+            @unlink($tmp);
+            throw new \RuntimeException("Failed to move registry into place [{$this->path}].");
+        }
     }
 }

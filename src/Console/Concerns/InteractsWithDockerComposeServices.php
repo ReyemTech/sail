@@ -228,6 +228,8 @@ trait InteractsWithDockerComposeServices
      */
     protected function applyLanConfig(?string $ip = null, ?string $domain = null): array
     {
+        $ipWasExplicit = $ip !== null;
+
         if (! $ip) {
             $envPath = base_path('.env');
             if (is_file($envPath) && preg_match('/^SAIL_BIND_IP=(.*)$/m', file_get_contents($envPath), $m)) {
@@ -253,6 +255,18 @@ trait InteractsWithDockerComposeServices
             $values['SAIL_DOMAIN'] = $domain;
             $values['APP_URL'] = 'https://'.$domain;
             $values['VITE_DEV_SERVER_URL'] = 'https://'.$domain.'/vite';
+        } elseif (! $ipWasExplicit) {
+            // Reusing the stored bind IP with no explicit domain: preserve the existing
+            // domain (custom or auto) so a heal/re-run never drifts it.
+            $envPath = base_path('.env');
+            if (is_file($envPath) && preg_match('/^SAIL_DOMAIN=(.*)$/m', file_get_contents($envPath), $dm)) {
+                $stored = trim($dm[1], " \"'");
+                if ($stored !== '') {
+                    $values['SAIL_DOMAIN'] = $stored;
+                    $values['APP_URL'] = 'https://'.$stored;
+                    $values['VITE_DEV_SERVER_URL'] = 'https://'.$stored.'/vite';
+                }
+            }
         }
 
         $home = new SailHome;
