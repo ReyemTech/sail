@@ -191,6 +191,21 @@ else
     COMPOSE_CMD=(${SAIL_DOCKER_BINARY}-compose)
 fi
 
+# In lan mode, regenerate a missing SAIL_FILES override before the check below bails...
+if [ -f .env ] && [ -n "${SAIL_FILES:-}" ]; then
+    SAIL_MODE_HEAL=$(grep -E '^SAIL_NETWORK_MODE=' .env 2>/dev/null | cut -d '=' -f2 | tr -d '"')
+    if [ "${SAIL_MODE_HEAL:-local}" = "lan" ]; then
+        IFS=':' read -ra SAIL_FILE_LIST <<< "$SAIL_FILES"
+        for F in "${SAIL_FILE_LIST[@]}"; do
+            if [ ! -f "$F" ]; then
+                echo "${YELLOW}Regenerating missing LAN override ($F)...${NC}" >&2
+                php artisan sail:network --mode=lan >/dev/null 2>&1 || true
+                break
+            fi
+        done
+    fi
+fi
+
 if [ -n "$SAIL_FILES" ]; then
     # Convert SAIL_FILES to an array...
     IFS=':' read -ra SAIL_FILES <<< "$SAIL_FILES"
