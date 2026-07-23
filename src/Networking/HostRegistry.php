@@ -111,6 +111,8 @@ class HostRegistry
             mkdir($dir, 0755, true);
         }
 
-        file_put_contents($this->path, json_encode($this->slots, JSON_PRETTY_PRINT).PHP_EOL);
+        $tmp = $this->path.'.'.getmypid().'.tmp';
+        file_put_contents($tmp, json_encode($this->slots, JSON_PRETTY_PRINT).PHP_EOL, LOCK_EX);
+        rename($tmp, $this->path);
     }
 }

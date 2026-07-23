@@ -72,4 +72,16 @@ class HostRegistryTest extends TestCase
         $this->assertSame(3316, HostRegistry::port(3306, 1));
         $this->assertSame(3326, HostRegistry::port(3306, 2));
     }
+
+    public function test_save_writes_atomically_without_leaving_temp_files(): void
+    {
+        $registry = new HostRegistry($this->path);
+        $registry->slotFor('alpha');
+        $registry->slotFor('beta');
+
+        // The registry file exists and parses; no leftover temp sibling for THIS path.
+        $this->assertFileExists($this->path);
+        $this->assertIsArray(json_decode((string) file_get_contents($this->path), true));
+        $this->assertSame([], glob($this->path.'.*.tmp'));
+    }
 }
