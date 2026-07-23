@@ -244,10 +244,7 @@ trait InteractsWithDockerComposeServices
 
         $writer = new Writer(base_path('.env'));
         foreach ($values as $key => $value) {
-            // Force-quote: several lan values (e.g. "lan", "nip") contain none
-            // of the characters MirazMac\DotEnv\Writer auto-quotes on, but the
-            // .env convention here is to always quote string values.
-            $writer->set($key, $value, true);
+            $writer->set($key, $value);
         }
         $writer->write();
 

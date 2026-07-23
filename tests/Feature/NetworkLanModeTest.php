@@ -35,7 +35,7 @@ class NetworkLanModeTest extends TestCase
         $this->assertStringContainsString('SAIL_BIND_IP="192.168.1.50"', $env);
         $this->assertStringContainsString('SAIL_DOMAIN="myproj.192-168-1-50.nip.io"', $env);
         $this->assertStringContainsString('APP_URL="https://myproj.192-168-1-50.nip.io"', $env);
-        $this->assertStringContainsString('SAIL_NETWORK_MODE="lan"', $env);
+        $this->assertStringContainsString('SAIL_NETWORK_MODE=lan', $env);
         // Subnet must be left untouched (not derived from the LAN IP).
         $this->assertStringContainsString('SAIL_SUBNET=172.20.0.0/24', $env);
         $this->assertStringNotContainsString('192.168.1.0/24', $env);
@@ -61,7 +61,8 @@ class NetworkLanModeTest extends TestCase
 
         $env = File::get($this->base.'/.env');
         $this->assertStringContainsString('SAIL_BIND_IP="172.20.0.11"', $env);
-        $this->assertStringContainsString('SAIL_NETWORK_MODE="local"', $env);
-        $this->assertStringContainsString('COMPOSE_PROFILES=""', $env);
+        $this->assertStringContainsString('SAIL_NETWORK_MODE=local', $env);
+        $this->assertMatchesRegularExpression('/^COMPOSE_PROFILES=\s*$/m', $env);
+        $this->assertStringNotContainsString('COMPOSE_PROFILES=lan', $env);
     }
 }

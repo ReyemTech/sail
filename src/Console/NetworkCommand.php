@@ -62,16 +62,10 @@ class NetworkCommand extends Command
                 : (string) config('sail.network.bind_ip', '172.20.0.10');
 
             $writer = new \MirazMac\DotEnv\Writer($envPath);
-            $writer->set('SAIL_BIND_IP', $bindIp, true);
-            $writer->set('SAIL_NETWORK_MODE', 'local', true);
+            $writer->set('SAIL_BIND_IP', $bindIp);
+            $writer->set('SAIL_NETWORK_MODE', 'local');
             $writer->set('COMPOSE_PROFILES', '');
             $writer->write();
-
-            // MirazMac\DotEnv\Writer never quotes an empty value (even with
-            // forceQuote), so patch COMPOSE_PROFILES="" in directly.
-            $contents = file_get_contents($envPath);
-            $contents = preg_replace('/^COMPOSE_PROFILES=$/m', 'COMPOSE_PROFILES=""', $contents);
-            file_put_contents($envPath, $contents);
 
             $this->components->info("Local mode restored: SAIL_BIND_IP={$bindIp}");
 
