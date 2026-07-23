@@ -313,13 +313,6 @@ elif [ "$1" == "up" ]; then
         php artisan sail:network >/dev/null 2>&1 || true
     fi
 
-    # In lan mode, ensure the shared network + shared proxy are up before starting the project...
-    SAIL_MODE_UP=$(grep -E '^SAIL_NETWORK_MODE=' .env 2>/dev/null | cut -d '=' -f2 | tr -d '"')
-    if [ "${SAIL_MODE_UP:-local}" = "lan" ]; then
-        docker network create sail-shared >/dev/null 2>&1 || true
-        php artisan sail:proxy up >/dev/null 2>&1 || true
-    fi
-
     # Run sail-setup before bringing containers up if needed
     # Skip if SAIL_SKIP_SETUP is set
     if [ -z "${SAIL_SKIP_SETUP:-}" ] && [ -f vendor/bin/sail-setup ]; then
@@ -375,6 +368,14 @@ elif [ "$1" == "up" ]; then
         fi
     fi
 
+    # In lan mode, ensure the shared network + shared proxy are up before starting the project...
+    # Runs AFTER sail-setup so the shared proxy mounts certs that already exist.
+    SAIL_MODE_UP=$(grep -E '^SAIL_NETWORK_MODE=' .env 2>/dev/null | cut -d '=' -f2 | tr -d '"')
+    if [ "${SAIL_MODE_UP:-local}" = "lan" ]; then
+        docker network create sail-shared >/dev/null 2>&1 || true
+        php artisan sail:proxy up >/dev/null 2>&1 || true
+    fi
+
     BAKE_CMD="docker buildx bake -f ${RUNTIME_DIR}/docker-bake.hcl app"
     if ! docker image inspect "$ORG/$APP_NAME:$VERSION" > /dev/null 2>&1; then
         echo "Docker image $ORG/$APP_NAME:$VERSION does not exist. Building the image..." >&2
@@ -383,7 +384,7 @@ elif [ "$1" == "up" ]; then
         echo "Docker image $ORG/$APP_NAME:$VERSION already exists. Skipping build." >&2
     fi
 
-    docker compose up "$@"
+    "${COMPOSE_CMD[@]}" up "$@"
 
     exit $?
 
