@@ -115,6 +115,37 @@ Make sure the target directory is on your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc
 ```
 
+## Running on a LAN server
+
+By default Sail binds to a host-local address, so a project is only reachable
+on the machine running it. To reach it from other devices on your network
+(laptop, phone), enable **LAN mode**:
+
+```bash
+# On the server, after install:
+sail artisan sail:network --mode=lan          # auto-detects the LAN IP
+# or pin the IP / domain explicitly:
+sail artisan sail:network --mode=lan --ip=192.168.1.50
+sail artisan sail:network --mode=lan --domain=dev.example.lan
+
+sail up
+```
+
+LAN mode:
+- Binds published ports to your server's LAN IP.
+- Uses a `nip.io` domain (`<project>.<lan-ip>.nip.io`) that resolves from any
+  device on the network — no `/etc/hosts` editing required, and it works on
+  Android where mDNS/`.local` does not.
+- Generates a trusted certificate with **mkcert**. To avoid TLS warnings on
+  your other devices, import the mkcert root CA
+  (`vendor/reyemtech/sail/certs/mkcert-rootCA.pem`) into each device's trust
+  store once.
+
+Return to local-only mode with `sail artisan sail:network --mode=local`.
+
+> One project per LAN IP for now. Multiple simultaneous LAN projects on one
+> host (shared proxy + mDNS) are coming in a later release.
+
 ## Building images + Helm charts
 
 `sail:build` builds multi-arch images via Docker Bake and generates the Helm chart in one step:
