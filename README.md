@@ -191,6 +191,52 @@ sail up      # auto-starts the shared proxy the first time
 
 Return any project to local-only mode with `sail artisan sail:network --mode=local`.
 
+### One dedicated LAN IP per project (`lan-direct`)
+
+If you'd rather **not** share a proxy and want each project on its own real LAN
+IP with the standard ports (`80/443/3306/…`) — no port juggling, no shared
+network — use **`lan-direct`** mode. Each project runs its own `nginx-proxy`
+bound to a distinct address you reserve on your LAN:
+
+```bash
+# Reserve a free address on your LAN subnet for THIS project, then:
+sail artisan sail:network --mode=lan-direct --ip=192.168.1.61
+sail up      # sail-setup aliases the IP onto your LAN NIC (needs sudo)
+```
+
+- Each project needs its **own** dedicated IP (`--ip` is required). Pick free
+  addresses on your LAN subnet — ideally outside your router's DHCP pool so they
+  aren't handed to other devices.
+- The IP is aliased onto your host's **default-route (LAN) interface**, so the
+  project is reachable from any device at `http(s)://<project>.<ip>.nip.io` (or
+  `<project>.local` with `--resolver=mdns`) on standard ports.
+- **Linux/macOS only, and NOT Docker-Desktop-compatible:** aliasing an IP onto
+  the host NIC needs root and a real host network interface. Docker Desktop's
+  VM-based networking can't publish to a NIC-aliased host IP. Use `lan` (shared
+  proxy) on Docker Desktop.
+- No `/etc/hosts` edits are needed — nip.io/.local resolve on their own.
+- Certificates use the per-project `vendor/reyemtech/sail/certs` dir (same as
+  local); import its `mkcert-rootCA.pem` on client devices.
+
+Switch back with `sail artisan sail:network --mode=local`.
+
+### Plain HTTP (no TLS)
+
+By default every exposed mode issues a trusted **mkcert** certificate and serves
+HTTPS. If you'd rather serve **plain HTTP** (e.g. quick throwaway testing, or a
+device you can't install the root CA on), add `--no-tls`:
+
+```bash
+sail artisan sail:network --mode=lan --no-tls          # shared proxy, HTTP
+sail artisan sail:network --mode=lan-direct --ip=192.168.1.61 --no-tls
+sail artisan sail:network --mode=lan --tls             # back to HTTPS (default)
+```
+
+With TLS off, `APP_URL`/`VITE_DEV_SERVER_URL` use `http://` and `sail-setup`
+skips mkcert entirely — `nginx-proxy` serves plain HTTP on `:80`. TLS stays
+**on by default**, so existing setups are unaffected. `--tls`/`--no-tls` are
+also available on `sail install`.
+
 ## Building images + Helm charts
 
 `sail:build` builds multi-arch images via Docker Bake and generates the Helm chart in one step:
