@@ -22,7 +22,8 @@ class InstallCommand extends Command
                 {--with= : The services that should be included in the installation}
                 {--devcontainer : Create a .devcontainer configuration directory}
                 {--php=8.5 : The PHP version that should be used}
-                {--mode= : Networking mode after install: local (default) or lan}';
+                {--mode= : Networking mode after install: local (default) or lan}
+                {--resolver= : LAN name resolver: nip (default) or mdns (.local)}';
 
     /**
      * The console command description.
@@ -67,7 +68,7 @@ class InstallCommand extends Command
 
         if ($this->option('mode') === 'lan') {
             try {
-                $this->applyLanConfig();
+                $this->applyLanConfig(null, null, $this->option('resolver'));
                 $this->components->info('LAN mode configured. Import the mkcert root CA on client devices to trust the certificate.');
             } catch (\RuntimeException $e) {
                 $this->components->error($e->getMessage());

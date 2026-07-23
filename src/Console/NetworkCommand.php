@@ -18,7 +18,8 @@ class NetworkCommand extends Command
                 {--status : Only report the current networking state}
                 {--mode= : Set networking mode: local or lan}
                 {--ip= : LAN IP to bind to (lan mode; auto-detected if omitted)}
-                {--domain= : Override the domain (lan mode)}';
+                {--domain= : Override the domain (lan mode)}
+                {--resolver= : LAN name resolver: nip (default) or mdns (.local)}';
 
     /**
      * @var string
@@ -59,7 +60,7 @@ class NetworkCommand extends Command
         $mode = $this->option('mode');
 
         if ($mode === 'lan') {
-            $values = $this->applyLanConfig($this->option('ip'), $this->option('domain'));
+            $values = $this->applyLanConfig($this->option('ip'), $this->option('domain'), $this->option('resolver'));
             $this->components->info("LAN mode configured: {$values['SAIL_DOMAIN']} -> {$values['SAIL_BIND_IP']}");
 
             return self::SUCCESS;

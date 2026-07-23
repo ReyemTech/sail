@@ -64,6 +64,41 @@ class NetworkLanSharedTest extends TestCase
         $this->assertStringContainsString('FORWARD_REDIS_PORT=6389', $env); // 6379 + slot1*10
     }
 
+    public function test_lan_mdns_writes_local_domain_and_avahi_sidecar(): void
+    {
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\n");
+
+        $this->artisan('sail:network', ['--mode' => 'lan', '--ip' => '192.168.1.50', '--resolver' => 'mdns'])
+            ->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertStringContainsString('SAIL_DOMAIN="alpha.local"', $env);
+        $this->assertStringContainsString('APP_URL="https://alpha.local"', $env);
+        $this->assertStringContainsString('SAIL_RESOLVER=mdns', $env);
+        $this->assertStringNotContainsString('nip.io', $env);
+
+        $override = File::get($this->home.'/overrides/alpha.yml');
+        $this->assertStringContainsString('avahi-publish:', $override);
+        $this->assertStringContainsString('avahi-publish -a -R ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $override);
+    }
+
+    public function test_lan_default_resolver_is_nip_without_avahi_sidecar(): void
+    {
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\n");
+
+        // No --resolver => nip.io default (config's mdns default must NOT leak in).
+        $this->artisan('sail:network', ['--mode' => 'lan', '--ip' => '192.168.1.50'])
+            ->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertStringContainsString('SAIL_DOMAIN="alpha.192-168-1-50.nip.io"', $env);
+        $this->assertStringContainsString('SAIL_RESOLVER=nip', $env);
+        $this->assertStringNotContainsString('.local"', $env);
+
+        $override = File::get($this->home.'/overrides/alpha.yml');
+        $this->assertStringNotContainsString('avahi-publish', $override);
+    }
+
     public function test_local_mode_clears_sail_files(): void
     {
         File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_IP=172.20.0.11\nSAIL_FILES=docker-compose.yml:/x/alpha.yml\n");

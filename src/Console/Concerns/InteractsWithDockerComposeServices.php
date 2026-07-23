@@ -226,7 +226,7 @@ trait InteractsWithDockerComposeServices
      *
      * @return array<string, string>
      */
-    protected function applyLanConfig(?string $ip = null, ?string $domain = null): array
+    protected function applyLanConfig(?string $ip = null, ?string $domain = null, ?string $resolver = null): array
     {
         $ipWasExplicit = $ip !== null;
 
@@ -244,8 +244,11 @@ trait InteractsWithDockerComposeServices
             throw new \RuntimeException('Could not detect a LAN IP address. Pass one explicitly with --ip=<address>.');
         }
 
-        // Only nip.io is supported in this release; mDNS arrives in Plan 2b.
-        $resolver = 'nip';
+        // LAN default is nip.io; mDNS (.local) is opt-in via --resolver=mdns.
+        // The config default ('mdns') is deliberately NOT used as the effective
+        // LAN default — nip.io stays the safe cross-device default (mDNS is
+        // unreliable on Android).
+        $resolver = in_array($resolver, ['nip', 'mdns'], true) ? $resolver : 'nip';
 
         $project = $this->resolveProjectName();
 
@@ -274,7 +277,7 @@ trait InteractsWithDockerComposeServices
 
         // Per-project override that disables the standalone proxy and joins the shared network.
         $overridePath = $home->overridesDir().'/'.$project.'.yml';
-        file_put_contents($overridePath, (new SharedProxyStack($ip, $home->certsDir()))->projectOverride());
+        file_put_contents($overridePath, (new SharedProxyStack($ip, $home->certsDir()))->projectOverride(null, $resolver === 'mdns'));
         $values['SAIL_FILES'] = basename($this->composePath()).':'.$overridePath;
 
         // Per-project raw-TCP port offsets so services don't collide on the shared IP.

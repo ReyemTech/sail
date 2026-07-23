@@ -23,12 +23,12 @@ class TestInstallCommand extends InstallCommand
 {
     public ?string $envAtPrepareInstallation = null;
 
-    protected function applyLanConfig(?string $ip = null, ?string $domain = null): array
+    protected function applyLanConfig(?string $ip = null, ?string $domain = null, ?string $resolver = null): array
     {
         // Pin a fixed, plausible LAN IP so the nip.io domain is deterministic
         // in any environment (CI or local), instead of relying on whatever
         // HostIpDetector discovers on the running machine.
-        return parent::applyLanConfig($ip ?? '192.168.50.77', $domain);
+        return parent::applyLanConfig($ip ?? '192.168.50.77', $domain, $resolver);
     }
 
     protected function prepareInstallation($services)
