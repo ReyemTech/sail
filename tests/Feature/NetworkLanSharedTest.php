@@ -20,7 +20,9 @@ class NetworkLanSharedTest extends TestCase
         chdir($this->base);
         putenv('SAIL_HOME='.$this->home);
         // Minimal compose so present-service detection finds mysql + redis.
-        File::put($this->base.'/docker-compose.yml', "services:\n  laravel: {}\n  mysql: {}\n  redis: {}\n");
+        // Named compose.yaml (the fork's first-detected default) rather than
+        // docker-compose.yml, so SAIL_FILES must derive the base name dynamically.
+        File::put($this->base.'/compose.yaml', "services:\n  laravel: {}\n  mysql: {}\n  redis: {}\n");
     }
 
     protected function tearDown(): void
@@ -39,10 +41,13 @@ class NetworkLanSharedTest extends TestCase
         $env = File::get($this->base.'/.env');
         $override = $this->home.'/overrides/alpha.yml';
         $this->assertFileExists($override);
-        $this->assertStringContainsString('SAIL_FILES="docker-compose.yml:'.$override.'"', $env);
+        $this->assertStringContainsString('SAIL_FILES="compose.yaml:'.$override.'"', $env);
         // Slot 0 → base ports.
         $this->assertStringContainsString('FORWARD_DB_PORT=3306', $env);
         $this->assertStringContainsString('FORWARD_REDIS_PORT=6379', $env);
+        // Services absent from the fixture (valkey, mailpit) get no forward var.
+        $this->assertStringNotContainsString('FORWARD_VALKEY_PORT', $env);
+        $this->assertStringNotContainsString('FORWARD_MAILPIT_DASHBOARD_PORT', $env);
     }
 
     public function test_second_project_gets_offset_ports(): void

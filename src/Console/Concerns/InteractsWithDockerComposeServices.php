@@ -237,7 +237,9 @@ trait InteractsWithDockerComposeServices
         // Only nip.io is supported in this release; mDNS arrives in Plan 2b.
         $resolver = 'nip';
 
-        $values = (new LanEnvironment($this->resolveProjectName(), $ip, $resolver))->values();
+        $project = $this->resolveProjectName();
+
+        $values = (new LanEnvironment($project, $ip, $resolver))->values();
 
         if ($domain) {
             $values['SAIL_DOMAIN'] = $domain;
@@ -247,12 +249,11 @@ trait InteractsWithDockerComposeServices
 
         $home = new SailHome;
         $home->ensureDirectories();
-        $project = $this->resolveProjectName();
 
         // Per-project override that disables the standalone proxy and joins the shared network.
         $overridePath = $home->overridesDir().'/'.$project.'.yml';
         file_put_contents($overridePath, (new SharedProxyStack($ip, $home->certsDir()))->projectOverride());
-        $values['SAIL_FILES'] = 'docker-compose.yml:'.$overridePath;
+        $values['SAIL_FILES'] = basename($this->composePath()).':'.$overridePath;
 
         // Per-project raw-TCP port offsets so services don't collide on the shared IP.
         $slot = (new HostRegistry($home->registryPath()))->slotFor($project);
