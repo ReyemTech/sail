@@ -15,4 +15,18 @@ return [
     'deploy' => [
         'domains' => env('SAIL_DEPLOY_DOMAINS', '.reyemtech.com'),
     ],
+    'network' => [
+        // Networking mode: 'local' (default, host-only) or 'lan' (exposed to LAN).
+        'mode' => env('SAIL_NETWORK_MODE', 'local'),
+        // How other devices resolve the project domain: 'mdns' | 'nip' | 'manual'.
+        'resolver' => env('SAIL_RESOLVER', 'mdns'),
+        // Issue a trusted (mkcert) certificate for the domain in exposed mode.
+        'tls' => env('SAIL_NETWORK_TLS', false),
+        // Host address published ports bind to. Local default is the Docker-range IP.
+        'bind_ip' => env('SAIL_BIND_IP', '172.20.0.10'),
+        // Docker bridge subnet (internal). Independent of bind_ip.
+        'subnet' => env('SAIL_SUBNET', '172.20.0.0/24'),
+        // Path to the per-machine host registry. Null => ~/.config/sail/registry.json.
+        'registry_path' => env('SAIL_REGISTRY_PATH', null),
+    ],
 ];
