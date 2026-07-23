@@ -162,6 +162,42 @@ trait InteractsWithDockerComposeServices
     }
 
     /**
+     * Ensure the .env defines SAIL_BIND_IP, seeding it from an existing
+     * SAIL_IP alias (or the configured default) when absent. Idempotent.
+     *
+     * @return array{ip: string, seeded: bool}
+     */
+    protected function ensureBindIp(): array
+    {
+        $envPath = base_path('.env');
+
+        if (! is_file($envPath)) {
+            return ['ip' => (string) config('sail.network.bind_ip', '172.20.0.10'), 'seeded' => false];
+        }
+
+        $contents = file_get_contents($envPath);
+
+        // Already defined — never overwrite an existing bind IP.
+        if (preg_match('/^SAIL_BIND_IP=(.*)$/m', $contents, $m)) {
+            return ['ip' => trim($m[1], " \"'"), 'seeded' => false];
+        }
+
+        // Prefer an existing SAIL_IP alias so upgraded projects keep their
+        // per-project bind address; fall back to the configured default.
+        if (preg_match('/^SAIL_IP=(.*)$/m', $contents, $m)) {
+            $ip = trim($m[1], " \"'");
+        } else {
+            $ip = (string) config('sail.network.bind_ip', '172.20.0.10');
+        }
+
+        $writer = new Writer($envPath);
+        $writer->set('SAIL_BIND_IP', $ip);
+        $writer->write();
+
+        return ['ip' => $ip, 'seeded' => true];
+    }
+
+    /**
      * Build the Docker Compose file.
      *
      * @param  array  $services

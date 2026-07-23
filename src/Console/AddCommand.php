@@ -49,6 +49,7 @@ class AddCommand extends Command
         }
 
         $this->buildDockerCompose($services);
+        $this->ensureBindIp();
         $this->replaceEnvVariables($services);
         $this->configurePhpUnit();
 

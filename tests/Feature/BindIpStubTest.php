@@ -54,4 +54,73 @@ class BindIpStubTest extends TestCase
 
         (new \Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
     }
+
+    private function makeEnsureBindIpCommand()
+    {
+        $command = new class extends \Illuminate\Console\Command {
+            use \Laravel\Sail\Console\Concerns\InteractsWithDockerComposeServices;
+            public function option($key = null) { return '8.5'; }
+            public function call($command, array $arguments = []) { return 0; }
+        };
+        $command->setLaravel($this->app);
+
+        return $command;
+    }
+
+    private function callEnsureBindIp($command): array
+    {
+        $method = new \ReflectionMethod($command, 'ensureBindIp');
+        $method->setAccessible(true);
+
+        return $method->invoke($command);
+    }
+
+    public function test_ensure_bind_ip_seeds_from_existing_sail_ip(): void
+    {
+        $base = sys_get_temp_dir().'/sail-ensurebindip-'.uniqid();
+        mkdir($base, 0755, true);
+        file_put_contents($base.'/.env', "APP_NAME=TestApp\nSAIL_IP=172.20.0.11\n");
+        $this->app->setBasePath($base);
+
+        $result = $this->callEnsureBindIp($this->makeEnsureBindIpCommand());
+
+        $this->assertSame(['ip' => '172.20.0.11', 'seeded' => true], $result);
+        $env = file_get_contents($base.'/.env');
+        $this->assertStringContainsString('SAIL_BIND_IP="172.20.0.11"', $env);
+
+        (new \Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
+    }
+
+    public function test_ensure_bind_ip_does_not_overwrite_existing_bind_ip(): void
+    {
+        $base = sys_get_temp_dir().'/sail-ensurebindip-'.uniqid();
+        mkdir($base, 0755, true);
+        file_put_contents($base.'/.env', "APP_NAME=TestApp\nSAIL_IP=172.20.0.11\nSAIL_BIND_IP=172.20.0.99\n");
+        $this->app->setBasePath($base);
+
+        $result = $this->callEnsureBindIp($this->makeEnsureBindIpCommand());
+
+        $this->assertSame(['ip' => '172.20.0.99', 'seeded' => false], $result);
+        $env = file_get_contents($base.'/.env');
+        $this->assertSame(1, substr_count($env, 'SAIL_BIND_IP='));
+        $this->assertStringContainsString('SAIL_BIND_IP=172.20.0.99', $env);
+
+        (new \Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
+    }
+
+    public function test_ensure_bind_ip_falls_back_to_config_default(): void
+    {
+        $base = sys_get_temp_dir().'/sail-ensurebindip-'.uniqid();
+        mkdir($base, 0755, true);
+        file_put_contents($base.'/.env', "APP_NAME=TestApp\n");
+        $this->app->setBasePath($base);
+
+        $result = $this->callEnsureBindIp($this->makeEnsureBindIpCommand());
+
+        $this->assertSame(['ip' => '172.20.0.10', 'seeded' => true], $result);
+        $env = file_get_contents($base.'/.env');
+        $this->assertStringContainsString('SAIL_BIND_IP="172.20.0.10"', $env);
+
+        (new \Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
+    }
 }

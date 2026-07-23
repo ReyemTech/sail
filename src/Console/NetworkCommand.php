@@ -3,11 +3,14 @@
 namespace Laravel\Sail\Console;
 
 use Illuminate\Console\Command;
+use Laravel\Sail\Console\Concerns\InteractsWithDockerComposeServices;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand(name: 'sail:network')]
 class NetworkCommand extends Command
 {
+    use InteractsWithDockerComposeServices;
+
     /**
      * @var string
      */
@@ -39,14 +42,10 @@ class NetworkCommand extends Command
             return self::FAILURE;
         }
 
-        if (env('SAIL_BIND_IP') === null && ! str_contains(file_get_contents($envPath), 'SAIL_BIND_IP=')) {
-            $envContent = file_get_contents($envPath);
-            if (mb_substr($envContent, -1) !== PHP_EOL) {
-                $envContent .= PHP_EOL;
-            }
-            file_put_contents($envPath, $envContent . "SAIL_BIND_IP={$bindIp}" . PHP_EOL);
+        $result = $this->ensureBindIp();
 
-            $this->components->info("Seeded SAIL_BIND_IP={$bindIp} into .env.");
+        if ($result['seeded']) {
+            $this->components->info("Seeded SAIL_BIND_IP={$result['ip']} into .env.");
         } else {
             $this->components->info('Networking already configured; nothing to do.');
         }

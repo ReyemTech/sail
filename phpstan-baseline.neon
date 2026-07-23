@@ -43,6 +43,12 @@ parameters:
 			path: src/Console/InstallCommand.php
 
 		-
+			message: '#^Method Laravel\\Sail\\Console\\NetworkCommand\:\:runSetup\(\) should return string but return statement is missing\.$#'
+			identifier: return.missing
+			count: 1
+			path: src/Console/NetworkCommand.php
+
+		-
 			message: '#^Method Laravel\\Sail\\Console\\PublishCommand\:\:runSetup\(\) should return string but return statement is missing\.$#'
 			identifier: return.missing
 			count: 1

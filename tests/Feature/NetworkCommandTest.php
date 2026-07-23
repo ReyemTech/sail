@@ -39,7 +39,7 @@ class NetworkCommandTest extends TestCase
 
         $this->artisan('sail:network')->assertSuccessful();
 
-        $this->assertStringContainsString('SAIL_BIND_IP=172.20.0.10', File::get($this->base.'/.env'));
+        $this->assertStringContainsString('SAIL_BIND_IP="172.20.0.10"', File::get($this->base.'/.env'));
     }
 
     public function test_does_not_duplicate_existing_bind_ip(): void
@@ -51,5 +51,16 @@ class NetworkCommandTest extends TestCase
         $env = File::get($this->base.'/.env');
         $this->assertSame(1, substr_count($env, 'SAIL_BIND_IP='));
         $this->assertStringContainsString('SAIL_BIND_IP=172.20.0.11', $env);
+    }
+
+    public function test_seeds_bind_ip_from_existing_sail_ip(): void
+    {
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_IP=172.20.0.11\n");
+
+        $this->artisan('sail:network')->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertStringContainsString('SAIL_BIND_IP="172.20.0.11"', $env);
+        $this->assertStringNotContainsString('SAIL_BIND_IP="172.20.0.10"', $env);
     }
 }
