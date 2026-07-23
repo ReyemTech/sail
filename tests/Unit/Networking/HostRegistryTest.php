@@ -18,6 +18,7 @@ class HostRegistryTest extends TestCase
     protected function tearDown(): void
     {
         @unlink($this->path);
+        @unlink($this->path.'.lock');
         parent::tearDown();
     }
 
@@ -83,5 +84,14 @@ class HostRegistryTest extends TestCase
         $this->assertFileExists($this->path);
         $this->assertIsArray(json_decode((string) file_get_contents($this->path), true));
         $this->assertSame([], glob($this->path.'.*.tmp'));
+    }
+
+    public function test_slot_for_reloads_committed_state_from_disk(): void
+    {
+        $early = new HostRegistry($this->path);              // loads an empty snapshot
+        (new HostRegistry($this->path))->slotFor('alpha');   // a different instance commits alpha=0
+
+        // Without reload-under-lock, $early would hand out slot 0 from its stale snapshot.
+        $this->assertSame(1, $early->slotFor('beta'));
     }
 }

@@ -19,15 +19,16 @@ class HostRegistry
      */
     public function slotFor(string $project): int
     {
-        if (array_key_exists($project, $this->slots)) {
-            return $this->slots[$project];
-        }
+        return $this->withLock(function () use ($project): int {
+            if (array_key_exists($project, $this->slots)) {
+                return $this->slots[$project];
+            }
 
-        $slot = $this->lowestFreeSlot();
-        $this->slots[$project] = $slot;
-        $this->save();
+            $slot = $this->lowestFreeSlot();
+            $this->slots[$project] = $slot;
 
-        return $slot;
+            return $slot;
+        });
     }
 
     /**
@@ -35,10 +36,9 @@ class HostRegistry
      */
     public function release(string $project): void
     {
-        if (array_key_exists($project, $this->slots)) {
+        $this->withLock(function () use ($project): void {
             unset($this->slots[$project]);
-            $this->save();
-        }
+        });
     }
 
     /**
@@ -48,16 +48,13 @@ class HostRegistry
      */
     public function prune(array $existingProjects): void
     {
-        $before = $this->slots;
-        $this->slots = array_filter(
-            $this->slots,
-            fn (string $project) => in_array($project, $existingProjects, true),
-            ARRAY_FILTER_USE_KEY
-        );
-
-        if ($this->slots !== $before) {
-            $this->save();
-        }
+        $this->withLock(function () use ($existingProjects): void {
+            $this->slots = array_filter(
+                $this->slots,
+                fn (string $project) => in_array($project, $existingProjects, true),
+                ARRAY_FILTER_USE_KEY
+            );
+        });
     }
 
     /**
@@ -104,6 +101,45 @@ class HostRegistry
         return is_array($decoded) ? $decoded : [];
     }
 
+    /**
+     * Run a mutation under an exclusive file lock: reload committed state,
+     * mutate, persist — atomically with respect to other processes.
+     *
+     * @param  callable  $mutation
+     * @return mixed
+     */
+    private function withLock(callable $mutation)
+    {
+        $dir = dirname($this->path);
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $handle = fopen($this->path.'.lock', 'c');
+
+        if ($handle === false) {
+            // Locking unavailable — best-effort (reload, mutate, save).
+            $this->slots = $this->load();
+            $result = $mutation();
+            $this->save();
+
+            return $result;
+        }
+
+        flock($handle, LOCK_EX);
+
+        try {
+            $this->slots = $this->load();
+            $result = $mutation();
+            $this->save();
+
+            return $result;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+
     private function save(): void
     {
         $dir = dirname($this->path);
@@ -112,7 +148,13 @@ class HostRegistry
         }
 
         $tmp = $this->path.'.'.getmypid().'.tmp';
-        file_put_contents($tmp, json_encode($this->slots, JSON_PRETTY_PRINT).PHP_EOL, LOCK_EX);
+        $json = json_encode($this->slots, JSON_PRETTY_PRINT).PHP_EOL;
+
+        if (file_put_contents($tmp, $json, LOCK_EX) !== strlen($json)) {
+            @unlink($tmp);
+            throw new \RuntimeException("Failed to write registry temp file [{$tmp}].");
+        }
+
         rename($tmp, $this->path);
     }
 }
