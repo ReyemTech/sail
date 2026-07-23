@@ -13,6 +13,7 @@ use Laravel\Sail\Console\HelmCommand;
 use Laravel\Sail\Console\HelmValidateCommand;
 use Laravel\Sail\Console\InstallCommand;
 use Laravel\Sail\Console\NetworkCommand;
+use Laravel\Sail\Console\ProxyCommand;
 use Laravel\Sail\Console\PublishCommand;
 use Reyemtech\Sail\Http\Middleware\ForceHttps;
 
@@ -66,6 +67,7 @@ class SailServiceProvider extends ServiceProvider implements DeferrableProvider
                 HelmValidateCommand::class,
                 CiCommand::class,
                 NetworkCommand::class,
+                ProxyCommand::class,
             ]);
         }
     }
@@ -104,6 +106,7 @@ class SailServiceProvider extends ServiceProvider implements DeferrableProvider
             PublishCommand::class,
             BuildCommand::class,
             NetworkCommand::class,
+            ProxyCommand::class,
         ];
     }
 }
