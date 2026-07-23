@@ -384,6 +384,26 @@ elif [ "$1" == "up" ]; then
                     if [ "$IP_ALIAS_EXISTS" -eq 0 ]; then
                         NEEDS_SETUP=1
                     fi
+                elif [ "$SAIL_MODE" = "lan-direct" ]; then
+                    # lan-direct aliases SAIL_IP onto the LAN (default-route)
+                    # interface, not loopback, and uses no /etc/hosts. Re-run
+                    # setup if that alias is missing (e.g. after a reboot).
+                    LAN_ALIAS_EXISTS=0
+                    if [ "$MACHINE" == "mac" ]; then
+                        LAN_IFACE=$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')
+                        if [ -n "$LAN_IFACE" ] && ifconfig "$LAN_IFACE" 2>/dev/null | grep -q "$SAIL_IP"; then
+                            LAN_ALIAS_EXISTS=1
+                        fi
+                    elif [ "$MACHINE" == "linux" ]; then
+                        LAN_IFACE=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
+                        if [ -n "$LAN_IFACE" ] && ip addr show dev "$LAN_IFACE" 2>/dev/null | grep -q "$SAIL_IP"; then
+                            LAN_ALIAS_EXISTS=1
+                        fi
+                    fi
+
+                    if [ "$LAN_ALIAS_EXISTS" -eq 0 ]; then
+                        NEEDS_SETUP=1
+                    fi
                 fi
             fi
         fi
