@@ -398,7 +398,7 @@ elif [ "$1" == "up" ]; then
     # Runs AFTER sail-setup so the shared proxy mounts certs that already exist.
     SAIL_MODE_UP=$(grep -E '^SAIL_NETWORK_MODE=' .env 2>/dev/null | cut -d '=' -f2 | tr -d '"')
     if [ "${SAIL_MODE_UP:-local}" = "lan" ]; then
-        docker network create sail-shared >/dev/null 2>&1 || true
+        ${SAIL_DOCKER_BINARY} network create sail-shared >/dev/null 2>&1 || true
         php artisan sail:proxy up >/dev/null 2>&1 || true
     fi
 

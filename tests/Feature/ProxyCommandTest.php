@@ -52,6 +52,31 @@ class ProxyCommandTest extends TestCase
         $this->assertStringContainsString('compose -f '.$stack.' up -d', $cmds);
     }
 
+    public function test_up_honors_sail_docker_binary_for_podman(): void
+    {
+        $log = $this->base.'/cmds.log';
+        $this->app->bind(\Laravel\Sail\Console\ProxyCommand::class, function () use ($log) {
+            return new class($log) extends \Laravel\Sail\Console\ProxyCommand {
+                private string $log;
+                public function __construct(string $log) { $this->log = $log; parent::__construct(); }
+                protected function runProcess(array $cmd): int { file_put_contents($this->log, implode(' ', $cmd)."\n", FILE_APPEND); return 0; }
+            };
+        });
+
+        putenv('SAIL_DOCKER_BINARY=podman');
+
+        try {
+            $this->artisan('sail:proxy', ['action' => 'up'])->assertSuccessful();
+        } finally {
+            putenv('SAIL_DOCKER_BINARY');
+        }
+
+        $cmds = File::get($log);
+        $this->assertStringContainsString('podman network create sail-shared', $cmds);
+        $this->assertStringContainsString('podman compose -f', $cmds);
+        $this->assertStringNotContainsString('docker network create', $cmds);
+    }
+
     public function test_status_reports_network_present(): void
     {
         $this->app->bind(\Laravel\Sail\Console\ProxyCommand::class, function () {

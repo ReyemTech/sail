@@ -35,8 +35,9 @@ class ProxyCommand extends Command
         $bindIp = $this->bindIp();
         file_put_contents($stack, (new SharedProxyStack($bindIp, $home->certsDir()))->proxyCompose());
 
-        $this->runProcess(['docker', 'network', 'create', 'sail-shared']);
-        $code = $this->runProcess(['docker', 'compose', '-f', $stack, 'up', '-d']);
+        $docker = $this->dockerBinary();
+        $this->runProcess([$docker, 'network', 'create', 'sail-shared']);
+        $code = $this->runProcess([$docker, 'compose', '-f', $stack, 'up', '-d']);
 
         $this->components->info("Shared proxy up on {$bindIp}:80/443.");
 
@@ -51,7 +52,7 @@ class ProxyCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->runProcess(['docker', 'compose', '-f', $stack, 'down']);
+        $this->runProcess([$this->dockerBinary(), 'compose', '-f', $stack, 'down']);
 
         $this->components->info('Shared proxy stopped.');
 
@@ -62,7 +63,7 @@ class ProxyCommand extends Command
     {
         $this->components->twoColumnDetail('Stack file', is_file($stack) ? $stack : '(not written)');
 
-        $exists = $this->processSucceeds(['docker', 'network', 'inspect', 'sail-shared']);
+        $exists = $this->processSucceeds([$this->dockerBinary(), 'network', 'inspect', 'sail-shared']);
         $this->components->twoColumnDetail('Shared network (sail-shared)', $exists ? 'present' : 'absent');
 
         return self::SUCCESS;
@@ -83,6 +84,15 @@ class ProxyCommand extends Command
         }
 
         return (string) config('sail.network.bind_ip', '172.20.0.10');
+    }
+
+    /**
+     * The container CLI to shell out to (docker, or podman via SAIL_DOCKER_BINARY,
+     * matching bin/sail's exported default).
+     */
+    protected function dockerBinary(): string
+    {
+        return getenv('SAIL_DOCKER_BINARY') ?: 'docker';
     }
 
     protected function runProcess(array $cmd): int
