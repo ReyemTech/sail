@@ -31,9 +31,22 @@ class NetworkCommand extends Command
         $bindIp = (string) config('sail.network.bind_ip', '172.20.0.10');
 
         if ($this->option('status')) {
-            $this->components->twoColumnDetail('Mode', $mode);
-            $this->components->twoColumnDetail('Bind IP', env('SAIL_BIND_IP', $bindIp));
-            $this->components->twoColumnDetail('Domain', env('SAIL_DOMAIN', config('sail.domain')));
+            $envPath = $this->laravel->basePath('.env');
+            $contents = is_file($envPath) ? file_get_contents($envPath) : '';
+
+            $read = function (string $key, string $default) use ($contents) {
+                return preg_match('/^'.$key.'=(.*)$/m', $contents, $m) ? trim($m[1], " \"'") : $default;
+            };
+
+            $this->components->twoColumnDetail('Mode', $read('SAIL_NETWORK_MODE', (string) config('sail.network.mode', 'local')));
+            $this->components->twoColumnDetail('Bind IP', $read('SAIL_BIND_IP', (string) config('sail.network.bind_ip', '172.20.0.10')));
+            $this->components->twoColumnDetail('Domain', $read('SAIL_DOMAIN', (string) config('sail.domain')));
+
+            if (preg_match_all('/^(FORWARD_\w+)=(.*)$/m', $contents, $ms, PREG_SET_ORDER)) {
+                foreach ($ms as $match) {
+                    $this->components->twoColumnDetail($match[1], trim($match[2], " \"'"));
+                }
+            }
 
             return self::SUCCESS;
         }
