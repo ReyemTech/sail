@@ -95,6 +95,24 @@ trait InteractsWithDockerComposeServices
     }
 
     /**
+     * Resolve the project name without prompting: prefer the SAIL_PROJECT
+     * entry already in .env, else the current directory name.
+     */
+    protected function resolveProjectName(): string
+    {
+        $envPath = base_path('.env');
+
+        if (is_file($envPath) && preg_match('/^SAIL_PROJECT=(.*)$/m', file_get_contents($envPath), $m)) {
+            $value = trim($m[1], " \"'");
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return basename(getcwd());
+    }
+
+    /**
      * Get the domain name to be used for the container.
      *
      * @param  string  $project
