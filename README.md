@@ -143,6 +143,32 @@ LAN mode:
 
 Return to local-only mode with `sail artisan sail:network --mode=local`.
 
+### Choosing a name resolver
+
+By default LAN mode uses **nip.io** (`<project>.<lan-ip>.nip.io`), which needs
+no extra host services and resolves everywhere — including Android, where
+mDNS/`.local` is unreliable. This is why nip.io stays the default.
+
+If you prefer a clean `<project>.local` name, opt into the **mDNS** resolver:
+
+```bash
+sail artisan sail:network --mode=lan --resolver=mdns   # <project>.local
+sail artisan sail:network --mode=lan --resolver=nip    # <project>.<ip>.nip.io (default)
+```
+
+mDNS mode:
+
+- Requires an **`avahi-daemon` running on the host** (e.g. `apt install avahi-daemon`
+  on Debian/Ubuntu; macOS Bonjour already provides mDNS).
+- Adds an `avahi-publish` sidecar (host-networked) to the project's compose
+  override that advertises `<project>.local` → your `SAIL_BIND_IP` to other
+  devices via the host daemon.
+- **Android caveat:** many Android devices don't resolve `.local` names
+  reliably — use nip.io for those clients.
+
+Once resolved, `.local` and nip.io projects share the same LAN reverse proxy and
+mkcert certificates described below.
+
 ### Multiple projects on one server
 
 LAN mode uses a single shared reverse proxy so any number of projects can run
