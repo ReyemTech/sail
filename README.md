@@ -143,8 +143,27 @@ LAN mode:
 
 Return to local-only mode with `sail artisan sail:network --mode=local`.
 
-> One project per LAN IP for now. Multiple simultaneous LAN projects on one
-> host (shared proxy + mDNS) are coming in a later release.
+### Multiple projects on one server
+
+LAN mode uses a single shared reverse proxy so any number of projects can run
+at once, each reachable at its own `nip.io` domain:
+
+```bash
+# In each project:
+sail artisan sail:network --mode=lan
+sail up      # auto-starts the shared proxy the first time
+```
+
+- Web traffic for every project is routed by domain through one shared proxy on
+  `:80/:443` — no port juggling for the web apps.
+- Each project's database/cache is published on a **unique** host port
+  (e.g. project A MySQL `3306`, project B `3316`) so they don't collide; run
+  `sail artisan sail:network --status` to see the assigned ports.
+- Certificates live in a shared dir (`~/.config/sail/certs`); import the mkcert
+  root CA (`~/.config/sail/certs/mkcert-rootCA.pem`) on client devices once.
+- Manage the shared proxy directly with `sail artisan sail:proxy up|down|status`.
+
+Return any project to local-only mode with `sail artisan sail:network --mode=local`.
 
 ## Building images + Helm charts
 
