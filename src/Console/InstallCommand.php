@@ -65,12 +65,17 @@ class InstallCommand extends Command
             $this->installDevContainer();
         }
 
-        $this->prepareInstallation($services);
-
         if ($this->option('mode') === 'lan') {
-            $this->applyLanConfig();
-            $this->components->info('LAN mode configured. Import the mkcert root CA on client devices to trust the certificate.');
+            try {
+                $this->applyLanConfig();
+                $this->components->info('LAN mode configured. Import the mkcert root CA on client devices to trust the certificate.');
+            } catch (\RuntimeException $e) {
+                $this->components->error($e->getMessage());
+                $this->components->warn('Skipping LAN configuration; run "sail artisan sail:network --mode=lan --ip=<address>" after install.');
+            }
         }
+
+        $this->prepareInstallation($services);
 
         $this->output->writeln('');
         $this->components->info('Sail scaffolding installed successfully. You may run your Docker containers using Sail\'s "up" command.');

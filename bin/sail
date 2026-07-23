@@ -318,13 +318,18 @@ elif [ "$1" == "up" ]; then
     if [ -z "${SAIL_SKIP_SETUP:-}" ] && [ -f vendor/bin/sail-setup ]; then
         # Check if setup is needed (certs missing, or .env has setup requirements)
         NEEDS_SETUP=0
+        DOMAIN=""
+        if [ -f .env ]; then
+            DOMAIN=$(grep -E '^APP_URL=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+        fi
         if [ ! -d "$RUNTIME_DIR/certs" ]; then
             NEEDS_SETUP=1
         elif [ ! -f "$RUNTIME_DIR/certs/mkcert-rootCA.pem" ]; then
             NEEDS_SETUP=1
+        elif [ -n "$DOMAIN" ] && [ ! -f "$RUNTIME_DIR/certs/$DOMAIN.crt" ]; then
+            NEEDS_SETUP=1
         elif [ -f .env ] && { grep -q '^SAIL_BIND_IP=' .env || grep -q '^SAIL_IP=' .env; } && grep -q "^APP_URL=" .env; then
             # Check if IP alias might be needed (setup handles this idempotently)
-            DOMAIN=$(grep -E '^APP_URL=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
             SAIL_IP=$(grep -E '^SAIL_BIND_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
             if [ -z "$SAIL_IP" ]; then
                 SAIL_IP=$(grep -E '^SAIL_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
