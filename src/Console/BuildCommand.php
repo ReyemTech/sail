@@ -109,7 +109,7 @@ class BuildCommand extends Command
         $buildFailed = false;
         foreach ($environments as $environment) {
             if (! in_array($environment, $this->environments)) {
-                $this->components->error('Invalid environment ['.implode(',', $environment).'].');
+                $this->components->error('Invalid environment ['.$environment.'].');
                 $this->components->warn('💡 Tip: Valid environments are: '.implode(', ', $this->environments));
 
                 return 1;
