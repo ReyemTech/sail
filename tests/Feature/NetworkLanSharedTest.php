@@ -73,4 +73,17 @@ class NetworkLanSharedTest extends TestCase
         $env = File::get($this->base.'/.env');
         $this->assertMatchesRegularExpression('/^SAIL_FILES=\s*("")?\s*$/m', $env);
     }
+
+    public function test_lan_reuses_existing_bind_ip_when_no_ip_given(): void
+    {
+        // .env already has a bind IP from a prior lan run; no --ip passed this time.
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_BIND_IP=192.168.9.9\n");
+
+        $this->artisan('sail:network', ['--mode' => 'lan'])->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        // The stored IP is reused (not re-detected), so the domain is built from it.
+        $this->assertStringContainsString('SAIL_BIND_IP="192.168.9.9"', $env);
+        $this->assertStringContainsString('alpha.192-168-9-9.nip.io', $env);
+    }
 }

@@ -228,6 +228,14 @@ trait InteractsWithDockerComposeServices
      */
     protected function applyLanConfig(?string $ip = null, ?string $domain = null): array
     {
+        if (! $ip) {
+            $envPath = base_path('.env');
+            if (is_file($envPath) && preg_match('/^SAIL_BIND_IP=(.*)$/m', file_get_contents($envPath), $m)) {
+                $existing = trim($m[1], " \"'");
+                $ip = $existing !== '' ? $existing : null;
+            }
+        }
+
         $ip = $ip ?: (new HostIpDetector)->detect();
 
         if (! $ip) {
