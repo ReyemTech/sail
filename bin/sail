@@ -138,6 +138,14 @@ elif [ -f ./.env ]; then
   source ./.env;
 fi
 
+# `source` sets shell vars but does not export them. Docker Compose reads
+# COMPOSE_PROFILES / SAIL_FILES from the process environment (not just .env),
+# and COMPOSE_PROFILES is what gates the per-project nginx-proxy off in shared
+# LAN mode — without exporting it the profile never activates and the
+# per-project proxy collides with the shared proxy on :80.
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
+export SAIL_FILES="${SAIL_FILES:-}"
+
 # Function that outputs Sail is not running...
 function sail_is_not_running {
     echo "${BOLD}Sail is not running.${NC}" >&2
