@@ -65,7 +65,11 @@ class NetworkCommand extends Command
             $writer->set('SAIL_BIND_IP', $bindIp);
             $writer->set('SAIL_NETWORK_MODE', 'local');
             $writer->set('COMPOSE_PROFILES', '');
+            $writer->set('SAIL_FILES', '');
             $writer->write();
+
+            (new \Laravel\Sail\Networking\HostRegistry((new \Laravel\Sail\Networking\SailHome)->registryPath()))
+                ->release($this->resolveProjectName());
 
             $this->components->info("Local mode restored: SAIL_BIND_IP={$bindIp}");
 

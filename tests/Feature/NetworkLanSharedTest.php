@@ -1,0 +1,71 @@
+<?php
+
+namespace Laravel\Sail\Tests\Feature;
+
+use Illuminate\Support\Facades\File;
+use Laravel\Sail\Tests\TestCase;
+
+class NetworkLanSharedTest extends TestCase
+{
+    private string $base;
+    private string $home;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->base = sys_get_temp_dir().'/sail-lanshared-'.uniqid();
+        $this->home = $this->base.'/home';
+        File::makeDirectory($this->base, 0755, true);
+        $this->app->setBasePath($this->base);
+        chdir($this->base);
+        putenv('SAIL_HOME='.$this->home);
+        // Minimal compose so present-service detection finds mysql + redis.
+        File::put($this->base.'/docker-compose.yml', "services:\n  laravel: {}\n  mysql: {}\n  redis: {}\n");
+    }
+
+    protected function tearDown(): void
+    {
+        putenv('SAIL_HOME');
+        File::deleteDirectory($this->base);
+        parent::tearDown();
+    }
+
+    public function test_lan_writes_override_sail_files_and_slot0_ports(): void
+    {
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\n");
+
+        $this->artisan('sail:network', ['--mode' => 'lan', '--ip' => '192.168.1.50'])->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $override = $this->home.'/overrides/alpha.yml';
+        $this->assertFileExists($override);
+        $this->assertStringContainsString('SAIL_FILES="docker-compose.yml:'.$override.'"', $env);
+        // Slot 0 → base ports.
+        $this->assertStringContainsString('FORWARD_DB_PORT=3306', $env);
+        $this->assertStringContainsString('FORWARD_REDIS_PORT=6379', $env);
+    }
+
+    public function test_second_project_gets_offset_ports(): void
+    {
+        // alpha already registered (slot 0) via a prior run in the shared SAIL_HOME registry.
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\n");
+        $this->artisan('sail:network', ['--mode' => 'lan', '--ip' => '192.168.1.50'])->assertSuccessful();
+
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=beta\n");
+        $this->artisan('sail:network', ['--mode' => 'lan', '--ip' => '192.168.1.50'])->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertStringContainsString('FORWARD_DB_PORT=3316', $env);   // 3306 + slot1*10
+        $this->assertStringContainsString('FORWARD_REDIS_PORT=6389', $env); // 6379 + slot1*10
+    }
+
+    public function test_local_mode_clears_sail_files(): void
+    {
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_IP=172.20.0.11\nSAIL_FILES=docker-compose.yml:/x/alpha.yml\n");
+
+        $this->artisan('sail:network', ['--mode' => 'local'])->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertMatchesRegularExpression('/^SAIL_FILES=\s*("")?\s*$/m', $env);
+    }
+}

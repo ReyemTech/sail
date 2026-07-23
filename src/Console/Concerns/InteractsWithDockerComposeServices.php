@@ -3,7 +3,10 @@
 namespace Laravel\Sail\Console\Concerns;
 
 use Laravel\Sail\Networking\HostIpDetector;
+use Laravel\Sail\Networking\HostRegistry;
 use Laravel\Sail\Networking\LanEnvironment;
+use Laravel\Sail\Networking\SailHome;
+use Laravel\Sail\Networking\SharedProxyStack;
 use MirazMac\DotEnv\Writer;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
@@ -242,6 +245,24 @@ trait InteractsWithDockerComposeServices
             $values['VITE_DEV_SERVER_URL'] = 'https://'.$domain.'/vite';
         }
 
+        $home = new SailHome;
+        $home->ensureDirectories();
+        $project = $this->resolveProjectName();
+
+        // Per-project override that disables the standalone proxy and joins the shared network.
+        $overridePath = $home->overridesDir().'/'.$project.'.yml';
+        file_put_contents($overridePath, (new SharedProxyStack($ip, $home->certsDir()))->projectOverride());
+        $values['SAIL_FILES'] = 'docker-compose.yml:'.$overridePath;
+
+        // Per-project raw-TCP port offsets so services don't collide on the shared IP.
+        $slot = (new HostRegistry($home->registryPath()))->slotFor($project);
+        $present = $this->composeServiceNames();
+        foreach ($this->forwardPortMap() as $service => [$var, $base]) {
+            if (in_array($service, $present, true)) {
+                $values[$var] = (string) HostRegistry::port($base, $slot);
+            }
+        }
+
         $writer = new Writer(base_path('.env'));
         foreach ($values as $key => $value) {
             $writer->set($key, $value);
@@ -249,6 +270,40 @@ trait InteractsWithDockerComposeServices
         $writer->write();
 
         return $values;
+    }
+
+    /**
+     * Map of raw-TCP services to the .env forward-port variable and base port
+     * that must be unique per project when sharing a single LAN IP.
+     *
+     * @return array<string, array{0: string, 1: int}>
+     */
+    protected function forwardPortMap(): array
+    {
+        return [
+            'mysql' => ['FORWARD_DB_PORT', 3306],
+            'pgsql' => ['FORWARD_DB_PORT', 5432],
+            'mariadb' => ['FORWARD_DB_PORT', 3306],
+            'redis' => ['FORWARD_REDIS_PORT', 6379],
+            'valkey' => ['FORWARD_VALKEY_PORT', 6379],
+            'mailpit' => ['FORWARD_MAILPIT_DASHBOARD_PORT', 8025],
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function composeServiceNames(): array
+    {
+        $path = $this->composePath();
+
+        if (! $path || ! is_file($path)) {
+            return [];
+        }
+
+        $parsed = Yaml::parseFile($path);
+
+        return array_keys($parsed['services'] ?? []);
     }
 
     /**
