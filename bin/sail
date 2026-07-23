@@ -313,6 +313,13 @@ elif [ "$1" == "up" ]; then
         php artisan sail:network >/dev/null 2>&1 || true
     fi
 
+    # In lan mode, ensure the shared network + shared proxy are up before starting the project...
+    SAIL_MODE_UP=$(grep -E '^SAIL_NETWORK_MODE=' .env 2>/dev/null | cut -d '=' -f2 | tr -d '"')
+    if [ "${SAIL_MODE_UP:-local}" = "lan" ]; then
+        docker network create sail-shared >/dev/null 2>&1 || true
+        php artisan sail:proxy up >/dev/null 2>&1 || true
+    fi
+
     # Run sail-setup before bringing containers up if needed
     # Skip if SAIL_SKIP_SETUP is set
     if [ -z "${SAIL_SKIP_SETUP:-}" ] && [ -f vendor/bin/sail-setup ]; then
