@@ -57,7 +57,7 @@ class SharedProxyStack
                 image: alpine:3
                 restart: unless-stopped
                 network_mode: host
-                command: sh -c "apk add --no-cache avahi-tools >/dev/null 2>&1 && exec avahi-publish -a -R \${SAIL_DOMAIN} \${SAIL_BIND_IP}"
+                command: sh -c "apk add --no-cache avahi-tools >/dev/null 2>&1 && exec avahi-publish -a \${SAIL_DOMAIN} \${SAIL_BIND_IP}"
                 volumes:
                     - /var/run/dbus:/var/run/dbus
                     - /var/run/avahi-daemon:/var/run/avahi-daemon

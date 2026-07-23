@@ -79,7 +79,7 @@ class NetworkLanSharedTest extends TestCase
 
         $override = File::get($this->home.'/overrides/alpha.yml');
         $this->assertStringContainsString('avahi-publish:', $override);
-        $this->assertStringContainsString('avahi-publish -a -R ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $override);
+        $this->assertStringContainsString('avahi-publish -a ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $override);
     }
 
     public function test_lan_default_resolver_is_nip_without_avahi_sidecar(): void

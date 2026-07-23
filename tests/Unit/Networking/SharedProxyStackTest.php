@@ -51,7 +51,7 @@ class SharedProxyStackTest extends TestCase
         $this->assertContains('/var/run/dbus:/var/run/dbus', $svc['volumes']);
         $this->assertContains('/var/run/avahi-daemon:/var/run/avahi-daemon', $svc['volumes']);
         // The advertised name + address come from .env at compose time.
-        $this->assertStringContainsString('avahi-publish -a -R ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $yaml);
+        $this->assertStringContainsString('avahi-publish -a ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $yaml);
         // The mdns sidecar is host-networked, so it must NOT join the shared network.
         $this->assertArrayNotHasKey('networks', $svc);
     }
