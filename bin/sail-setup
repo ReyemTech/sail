@@ -8,6 +8,13 @@ if [ -z "$SAIL_IP" ]; then
 fi
 SAIL_NETWORK_MODE=$(grep -E '^SAIL_NETWORK_MODE=' .env | cut -d '=' -f2 | tr -d '"')
 SAIL_NETWORK_MODE=${SAIL_NETWORK_MODE:-local}
+SAIL_HOME_DIR=${SAIL_HOME:-"$HOME/.config/sail"}
+if [ "$SAIL_NETWORK_MODE" = "local" ]; then
+    CERT_TARGET="vendor/reyemtech/sail/certs"
+else
+    CERT_TARGET="$SAIL_HOME_DIR/certs"
+    mkdir -p "$CERT_TARGET"
+fi
 
 # Verify operating system is supported...
 case "${UNAMEOUT}" in
@@ -172,7 +179,7 @@ function generate_certificates {
     header "Generating SSL certificates for $DOMAIN"
     # Generate SSL certificates for the host machine using mkcert...
 
-    CERT_FOLDER="vendor/reyemtech/sail/certs"
+    CERT_FOLDER="$CERT_TARGET"
 
     if [ ! -f "$CERT_FOLDER/$DOMAIN.crt" ] || [ ! -f "$CERT_FOLDER/$DOMAIN.key" ] ||
         ! openssl x509 -checkend 86400 -noout -in "$CERT_FOLDER/$DOMAIN.crt" >/dev/null 2>&1; then
@@ -188,13 +195,15 @@ function generate_certificates {
         info "Certificates are valid and not expired. Skipping creation."
     fi
 
-    LINK_FOLDERS=(
-        "vendor/reyemtech/sail/runtimes/8.x"
-    )
-    for folder in "${LINK_FOLDERS[@]}"; do
-        rm -rf "$(pwd)/$folder/certs"
-        cp -fr "$(pwd)/$CERT_FOLDER" "$(pwd)/$folder"
-    done
+    if [ "$SAIL_NETWORK_MODE" = "local" ]; then
+        LINK_FOLDERS=(
+            "vendor/reyemtech/sail/runtimes/8.x"
+        )
+        for folder in "${LINK_FOLDERS[@]}"; do
+            rm -rf "$(pwd)/$folder/certs"
+            cp -fr "$(pwd)/$CERT_FOLDER" "$(pwd)/$folder"
+        done
+    fi
 }
 
 function link_application {
