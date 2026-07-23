@@ -186,8 +186,14 @@ function generate_certificates {
         [ -d "$CERT_FOLDER" ] || mkdir -p "$CERT_FOLDER"
         mkcert -install >/dev/null 2>&1
         mkcert -cert-file "$CERT_FOLDER/$DOMAIN.crt" -key-file "$CERT_FOLDER/$DOMAIN.key" "$DOMAIN" "minio" >/dev/null 2>&1
-        cp "$CERT_FOLDER/$DOMAIN.crt" "$CERT_FOLDER/public.crt"
-        cp "$CERT_FOLDER/$DOMAIN.key" "$CERT_FOLDER/private.key"
+        # In lan mode the certs dir is shared across projects, so the generic
+        # public.crt/private.key would collide (last project wins). Only the
+        # per-domain <domain>.crt/.key are written there; local mode keeps the
+        # generic pair for its single-project runtime mount.
+        if [ "$SAIL_NETWORK_MODE" = "local" ]; then
+            cp "$CERT_FOLDER/$DOMAIN.crt" "$CERT_FOLDER/public.crt"
+            cp "$CERT_FOLDER/$DOMAIN.key" "$CERT_FOLDER/private.key"
+        fi
         cp "$(mkcert -CAROOT)/rootCA.pem" "$CERT_FOLDER/mkcert-rootCA.pem"
 
         success "Certificates created or renewed successfully in the ${NC}$CERT_FOLDER${GREEN} folder."
