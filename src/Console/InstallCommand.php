@@ -21,7 +21,8 @@ class InstallCommand extends Command
     protected $signature = 'sail:install
                 {--with= : The services that should be included in the installation}
                 {--devcontainer : Create a .devcontainer configuration directory}
-                {--php=8.5 : The PHP version that should be used}';
+                {--php=8.5 : The PHP version that should be used}
+                {--mode= : Networking mode after install: local (default) or lan}';
 
     /**
      * The console command description.
@@ -65,6 +66,11 @@ class InstallCommand extends Command
         }
 
         $this->prepareInstallation($services);
+
+        if ($this->option('mode') === 'lan') {
+            $this->applyLanConfig();
+            $this->components->info('LAN mode configured. Import the mkcert root CA on client devices to trust the certificate.');
+        }
 
         $this->output->writeln('');
         $this->components->info('Sail scaffolding installed successfully. You may run your Docker containers using Sail\'s "up" command.');

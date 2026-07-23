@@ -14,7 +14,11 @@ class NetworkCommand extends Command
     /**
      * @var string
      */
-    protected $signature = 'sail:network {--status : Only report the current networking state}';
+    protected $signature = 'sail:network
+                {--status : Only report the current networking state}
+                {--mode= : Set networking mode: local or lan}
+                {--ip= : LAN IP to bind to (lan mode; auto-detected if omitted)}
+                {--domain= : Override the domain (lan mode)}';
 
     /**
      * @var string
@@ -40,6 +44,38 @@ class NetworkCommand extends Command
             $this->components->error('No .env file found. Run "sail:install" first.');
 
             return self::FAILURE;
+        }
+
+        $mode = $this->option('mode');
+
+        if ($mode === 'lan') {
+            $values = $this->applyLanConfig($this->option('ip'), $this->option('domain'));
+            $this->components->info("LAN mode configured: {$values['SAIL_DOMAIN']} -> {$values['SAIL_BIND_IP']}");
+
+            return self::SUCCESS;
+        }
+
+        if ($mode === 'local') {
+            $contents = file_get_contents($envPath);
+            $bindIp = preg_match('/^SAIL_IP=(.*)$/m', $contents, $m)
+                ? trim($m[1], " \"'")
+                : (string) config('sail.network.bind_ip', '172.20.0.10');
+
+            $writer = new \MirazMac\DotEnv\Writer($envPath);
+            $writer->set('SAIL_BIND_IP', $bindIp, true);
+            $writer->set('SAIL_NETWORK_MODE', 'local', true);
+            $writer->set('COMPOSE_PROFILES', '');
+            $writer->write();
+
+            // MirazMac\DotEnv\Writer never quotes an empty value (even with
+            // forceQuote), so patch COMPOSE_PROFILES="" in directly.
+            $contents = file_get_contents($envPath);
+            $contents = preg_replace('/^COMPOSE_PROFILES=$/m', 'COMPOSE_PROFILES=""', $contents);
+            file_put_contents($envPath, $contents);
+
+            $this->components->info("Local mode restored: SAIL_BIND_IP={$bindIp}");
+
+            return self::SUCCESS;
         }
 
         $result = $this->ensureBindIp();

@@ -2,6 +2,8 @@
 
 namespace Laravel\Sail\Console\Concerns;
 
+use Laravel\Sail\Networking\HostIpDetector;
+use Laravel\Sail\Networking\LanEnvironment;
 use MirazMac\DotEnv\Writer;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
@@ -213,6 +215,43 @@ trait InteractsWithDockerComposeServices
         $writer->write();
 
         return ['ip' => $ip, 'seeded' => true];
+    }
+
+    /**
+     * Apply LAN-mode networking values to .env (bind IP, nip.io domain, URLs,
+     * profile). Never touches SAIL_SUBNET. Returns the written map.
+     *
+     * @return array<string, string>
+     */
+    protected function applyLanConfig(?string $ip = null, ?string $domain = null): array
+    {
+        $ip = $ip ?: (new HostIpDetector)->detect();
+
+        if (! $ip) {
+            throw new \RuntimeException('Could not detect a LAN IP address. Pass one explicitly with --ip=<address>.');
+        }
+
+        // Only nip.io is supported in this release; mDNS arrives in Plan 2b.
+        $resolver = 'nip';
+
+        $values = (new LanEnvironment($this->resolveProjectName(), $ip, $resolver))->values();
+
+        if ($domain) {
+            $values['SAIL_DOMAIN'] = $domain;
+            $values['APP_URL'] = 'https://'.$domain;
+            $values['VITE_DEV_SERVER_URL'] = 'https://'.$domain.'/vite';
+        }
+
+        $writer = new Writer(base_path('.env'));
+        foreach ($values as $key => $value) {
+            // Force-quote: several lan values (e.g. "lan", "nip") contain none
+            // of the characters MirazMac\DotEnv\Writer auto-quotes on, but the
+            // .env convention here is to always quote string values.
+            $writer->set($key, $value, true);
+        }
+        $writer->write();
+
+        return $values;
     }
 
     /**
