@@ -9,7 +9,9 @@ class LanEnvironment
     public function __construct(
         private string $project,
         private string $bindIp,
-        private string $resolver = 'nip'
+        private string $resolver = 'nip',
+        private bool $tls = true,
+        private string $mode = 'lan'
     ) {
     }
 
@@ -28,16 +30,26 @@ class LanEnvironment
     public function values(): array
     {
         $domain = $this->domain();
+        $scheme = $this->tls ? 'https' : 'http';
 
-        return [
+        $values = [
             'SAIL_BIND_IP' => $this->bindIp,
             'SAIL_DOMAIN' => $domain,
-            'APP_URL' => 'https://'.$domain,
-            'VITE_DEV_SERVER_URL' => 'https://'.$domain.'/vite',
-            'SAIL_NETWORK_MODE' => 'lan',
+            'APP_URL' => $scheme.'://'.$domain,
+            'VITE_DEV_SERVER_URL' => $scheme.'://'.$domain.'/vite',
+            'SAIL_NETWORK_MODE' => $this->mode,
             'SAIL_RESOLVER' => $this->resolver,
-            'COMPOSE_PROFILES' => 'lan',
+            'SAIL_NETWORK_TLS' => $this->tls ? 'true' : 'false',
         ];
+
+        // Only the shared-proxy 'lan' mode activates the compose 'lan' profile
+        // (which gates each project's standalone nginx-proxy off). 'lan-direct'
+        // keeps its own per-project proxy on standard ports — no profile.
+        if ($this->mode === 'lan') {
+            $values['COMPOSE_PROFILES'] = 'lan';
+        }
+
+        return $values;
     }
 
     private function slug(string $value): string

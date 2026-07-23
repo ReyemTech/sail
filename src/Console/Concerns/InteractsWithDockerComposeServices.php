@@ -226,9 +226,10 @@ trait InteractsWithDockerComposeServices
      *
      * @return array<string, string>
      */
-    protected function applyLanConfig(?string $ip = null, ?string $domain = null, ?string $resolver = null): array
+    protected function applyLanConfig(?string $ip = null, ?string $domain = null, ?string $resolver = null, bool $tls = true): array
     {
         $ipWasExplicit = $ip !== null;
+        $scheme = $tls ? 'https' : 'http';
 
         if (! $ip) {
             $envPath = base_path('.env');
@@ -252,12 +253,12 @@ trait InteractsWithDockerComposeServices
 
         $project = $this->resolveProjectName();
 
-        $values = (new LanEnvironment($project, $ip, $resolver))->values();
+        $values = (new LanEnvironment($project, $ip, $resolver, $tls))->values();
 
         if ($domain) {
             $values['SAIL_DOMAIN'] = $domain;
-            $values['APP_URL'] = 'https://'.$domain;
-            $values['VITE_DEV_SERVER_URL'] = 'https://'.$domain.'/vite';
+            $values['APP_URL'] = $scheme.'://'.$domain;
+            $values['VITE_DEV_SERVER_URL'] = $scheme.'://'.$domain.'/vite';
         } elseif (! $ipWasExplicit) {
             // Reusing the stored bind IP with no explicit domain: preserve the existing
             // domain (custom or auto) so a heal/re-run never drifts it.
@@ -266,8 +267,8 @@ trait InteractsWithDockerComposeServices
                 $stored = trim($dm[1], " \"'");
                 if ($stored !== '') {
                     $values['SAIL_DOMAIN'] = $stored;
-                    $values['APP_URL'] = 'https://'.$stored;
-                    $values['VITE_DEV_SERVER_URL'] = 'https://'.$stored.'/vite';
+                    $values['APP_URL'] = $scheme.'://'.$stored;
+                    $values['VITE_DEV_SERVER_URL'] = $scheme.'://'.$stored.'/vite';
                 }
             }
         }
@@ -296,6 +297,91 @@ trait InteractsWithDockerComposeServices
         $writer->write();
 
         return $values;
+    }
+
+    /**
+     * Apply lan-direct networking to .env: this project binds its OWN per-project
+     * nginx-proxy to a DISTINCT real LAN IP (aliased onto the host NIC) keeping
+     * standard ports (80/443/3306/…). Unlike shared 'lan' mode there is NO
+     * SAIL_FILES override, no shared network, and no per-project port offsets.
+     *
+     * Requires a dedicated LAN IP: an explicit --ip, or a bind IP already stored
+     * from a prior lan-direct run. HostIpDetector is only a hint for the error.
+     *
+     * @return array<string, string>
+     */
+    protected function applyLanDirectConfig(?string $ip = null, ?string $domain = null, ?string $resolver = null, bool $tls = true): array
+    {
+        $envPath = base_path('.env');
+        $contents = is_file($envPath) ? file_get_contents($envPath) : '';
+
+        if (! $ip) {
+            // Only reuse a stored bind IP when the project is ALREADY in
+            // lan-direct mode — never inherit the docker-range local IP.
+            $mode = preg_match('/^SAIL_NETWORK_MODE=(.*)$/m', $contents, $mm) ? trim($mm[1], " \"'") : '';
+            if ($mode === 'lan-direct' && preg_match('/^SAIL_BIND_IP=(.*)$/m', $contents, $m)) {
+                $existing = trim($m[1], " \"'");
+                $ip = $existing !== '' ? $existing : null;
+            }
+        }
+
+        if (! $ip) {
+            $hint = (new HostIpDetector)->detect();
+            $message = 'lan-direct mode requires a dedicated LAN IP reserved for this project. Pass one with --ip=<address>.';
+            if ($hint) {
+                $message .= " This host's current LAN IP is {$hint}; pick a DIFFERENT free address on the same subnet (each project needs its own).";
+            }
+
+            throw new \RuntimeException($message);
+        }
+
+        $resolver = in_array($resolver, ['nip', 'mdns'], true) ? $resolver : 'nip';
+        $scheme = $tls ? 'https' : 'http';
+        $project = $this->resolveProjectName();
+
+        $values = (new LanEnvironment($project, $ip, $resolver, $tls, 'lan-direct'))->values();
+
+        if ($domain) {
+            $values['SAIL_DOMAIN'] = $domain;
+            $values['APP_URL'] = $scheme.'://'.$domain;
+            $values['VITE_DEV_SERVER_URL'] = $scheme.'://'.$domain.'/vite';
+        }
+
+        // Per-project proxy on standard ports: clear any shared-lan leftovers so a
+        // switch from 'lan' → 'lan-direct' never keeps the override or profile.
+        $values['SAIL_FILES'] = '';
+        $values['COMPOSE_PROFILES'] = '';
+
+        $writer = new Writer($envPath);
+        foreach ($values as $key => $value) {
+            $writer->set($key, $value);
+        }
+        $writer->write();
+
+        return $values;
+    }
+
+    /**
+     * Resolve the desired TLS setting for a networking command: an explicit
+     * --tls / --no-tls flag wins; otherwise honor an existing SAIL_NETWORK_TLS
+     * in .env; otherwise default ON (today's behavior — never a silent regression).
+     */
+    protected function resolveTlsOption(): bool
+    {
+        if ($this->hasOption('no-tls') && $this->option('no-tls')) {
+            return false;
+        }
+
+        if ($this->hasOption('tls') && $this->option('tls')) {
+            return true;
+        }
+
+        $envPath = base_path('.env');
+        if (is_file($envPath) && preg_match('/^SAIL_NETWORK_TLS=(.*)$/m', file_get_contents($envPath), $m)) {
+            return filter_var(trim($m[1], " \"'"), FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return true;
     }
 
     /**

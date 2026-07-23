@@ -16,10 +16,12 @@ class NetworkCommand extends Command
      */
     protected $signature = 'sail:network
                 {--status : Only report the current networking state}
-                {--mode= : Set networking mode: local or lan}
-                {--ip= : LAN IP to bind to (lan mode; auto-detected if omitted)}
-                {--domain= : Override the domain (lan mode)}
-                {--resolver= : LAN name resolver: nip (default) or mdns (.local)}';
+                {--mode= : Set networking mode: local, lan, or lan-direct}
+                {--ip= : LAN IP to bind to (lan/lan-direct mode; auto-detected for lan if omitted)}
+                {--domain= : Override the domain (lan/lan-direct mode)}
+                {--resolver= : LAN name resolver: nip (default) or mdns (.local)}
+                {--tls : Issue a trusted (mkcert) certificate — the default}
+                {--no-tls : Serve plain HTTP; skip certificate generation}';
 
     /**
      * @var string
@@ -60,8 +62,23 @@ class NetworkCommand extends Command
         $mode = $this->option('mode');
 
         if ($mode === 'lan') {
-            $values = $this->applyLanConfig($this->option('ip'), $this->option('domain'), $this->option('resolver'));
+            $values = $this->applyLanConfig($this->option('ip'), $this->option('domain'), $this->option('resolver'), $this->resolveTlsOption());
             $this->components->info("LAN mode configured: {$values['SAIL_DOMAIN']} -> {$values['SAIL_BIND_IP']}");
+
+            return self::SUCCESS;
+        }
+
+        if ($mode === 'lan-direct') {
+            try {
+                $values = $this->applyLanDirectConfig($this->option('ip'), $this->option('domain'), $this->option('resolver'), $this->resolveTlsOption());
+            } catch (\RuntimeException $e) {
+                $this->components->error($e->getMessage());
+
+                return self::FAILURE;
+            }
+
+            $this->components->info("lan-direct mode configured: {$values['SAIL_DOMAIN']} -> {$values['SAIL_BIND_IP']}");
+            $this->components->warn('lan-direct aliases a dedicated LAN IP onto the host NIC (Linux/macOS, needs sudo; NOT Docker-Desktop-compatible). Run "sail up" to apply.');
 
             return self::SUCCESS;
         }
