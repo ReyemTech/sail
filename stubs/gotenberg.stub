@@ -2,7 +2,7 @@ gotenberg:
     image: 'gotenberg/gotenberg:8'
     restart: unless-stopped
     ports:
-        - '${SAIL_IP:-172.20.0.10}:${FORWARD_GOTENBERG_PORT:-3000}:3000'
+        - '${SAIL_BIND_IP:-172.20.0.10}:${FORWARD_GOTENBERG_PORT:-3000}:3000'
     networks:
         - sail
     healthcheck:

@@ -148,6 +148,7 @@ trait InteractsWithDockerComposeServices
 
         $writer = new Writer(base_path('.env'));
         $writer->set('SAIL_IP', $ip);
+        $writer->set('SAIL_BIND_IP', $ip);
         $writer->set('SAIL_SUBNET', $subnet);
         $writer->set('SAIL_PROJECT', $project);
         // $domain = parse_url(config('app.url'), PHP_URL_HOST);
