@@ -27,9 +27,6 @@ class NetworkCommand extends Command
 
     public function handle(): int
     {
-        $mode = (string) config('sail.network.mode', 'local');
-        $bindIp = (string) config('sail.network.bind_ip', '172.20.0.10');
-
         if ($this->option('status')) {
             $envPath = $this->laravel->basePath('.env');
             $contents = is_file($envPath) ? file_get_contents($envPath) : '';

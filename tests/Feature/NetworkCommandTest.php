@@ -35,11 +35,13 @@ class NetworkCommandTest extends TestCase
 
     public function test_status_reports_lan_domain_and_forward_ports(): void
     {
-        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_NETWORK_MODE=lan\nSAIL_DOMAIN=alpha.192-168-1-50.nip.io\nFORWARD_DB_PORT=3316\n");
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_NETWORK_MODE=lan\nSAIL_DOMAIN=alpha.192-168-1-50.nip.io\nFORWARD_DB_PORT=3316\nFORWARD_REDIS_PORT=6380\n");
 
         $this->artisan('sail:network', ['--status' => true])
             ->expectsOutputToContain('lan')
             ->expectsOutputToContain('alpha.192-168-1-50.nip.io')
+            ->expectsOutputToContain('FORWARD_DB_PORT')
+            ->expectsOutputToContain('FORWARD_REDIS_PORT')
             ->assertSuccessful();
     }
 
