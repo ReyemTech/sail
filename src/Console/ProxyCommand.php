@@ -33,7 +33,11 @@ class ProxyCommand extends Command
         $home->ensureDirectories();
 
         $bindIp = $this->bindIp();
-        file_put_contents($stack, (new SharedProxyStack($bindIp, $home->certsDir()))->proxyCompose());
+        $proxy = new SharedProxyStack($bindIp, $home->certsDir());
+        file_put_contents($stack, $proxy->proxyCompose());
+        // Written next to the compose so the relative ./proxy-buffers.conf mount
+        // resolves (raises header buffers so large upstream headers don't 502).
+        file_put_contents($home->proxyDir().'/proxy-buffers.conf', $proxy->proxyBuffersConf());
 
         $docker = $this->dockerBinary();
         $this->runProcess([$docker, 'network', 'create', 'sail-shared']);

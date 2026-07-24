@@ -22,6 +22,27 @@ class SharedProxyStackTest extends TestCase
         $this->assertTrue($parsed['networks']['sail-shared']['external']);
     }
 
+    public function test_proxy_compose_mounts_raised_header_buffers(): void
+    {
+        $stack = new SharedProxyStack('192.168.1.50', '/home/u/.config/sail/certs');
+        $parsed = Yaml::parse($stack->proxyCompose());
+
+        // Relative to the compose file's dir (compose resolves host paths there),
+        // so no absolute path needed — ProxyCommand writes proxy-buffers.conf next
+        // to the compose file.
+        $this->assertContains(
+            './proxy-buffers.conf:/etc/nginx/conf.d/00-proxy-buffers.conf:ro',
+            $parsed['services']['nginx-proxy']['volumes'],
+            'compose should mount the proxy-buffers conf into conf.d'
+        );
+
+        // The buffers raise nginx's 4k/8k default so a large upstream response
+        // header (long CSP, many Set-Cookie) doesn't overflow and 502.
+        $conf = $stack->proxyBuffersConf();
+        $this->assertStringContainsString('proxy_buffer_size', $conf);
+        $this->assertStringContainsString('proxy_buffers', $conf);
+    }
+
     public function test_project_override_disables_local_proxy_and_joins_shared_network(): void
     {
         $yaml = (new SharedProxyStack('192.168.1.50', '/x/certs'))->projectOverride();
