@@ -41,20 +41,32 @@ class SharedProxyStackTest extends TestCase
         $this->assertArrayNotHasKey('avahi-publish', $parsed['services']);
     }
 
-    public function test_project_override_emits_avahi_sidecar_when_mdns(): void
+    public function test_project_override_emits_cname_avahi_sidecar_when_mdns(): void
     {
         $yaml = (new SharedProxyStack('192.168.1.50', '/x/certs'))->projectOverride(null, true);
         $parsed = Yaml::parse($yaml);
 
         $svc = $parsed['services']['avahi-publish'];
         $this->assertSame('host', $svc['network_mode']);
-        // The load-bearing mount: the D-Bus system bus the host avahi-daemon
-        // listens on (canonical /run path; /var/run is a symlink to it).
+        // AppArmor's D-Bus mediation blocks the docker-default profile from the
+        // system bus (member="Hello" DENIED) — without unconfined the publisher
+        // gets "Failed to create client object: Access denied" and crash-loops.
+        $this->assertContains('apparmor:unconfined', $svc['security_opt']);
+        // The D-Bus system bus is the only load-bearing mount.
         $this->assertContains('/run/dbus:/run/dbus', $svc['volumes']);
-        $this->assertContains('/var/run/avahi-daemon:/var/run/avahi-daemon', $svc['volumes']);
-        // The advertised name + address come from .env at compose time.
-        $this->assertStringContainsString('avahi-publish -a ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $yaml);
-        // apk / avahi failures must surface in `docker logs`, never be silenced.
+        // Publishes a CNAME (<project>.local -> <host>.local), NOT an A record:
+        // avahi-publish -a owns the reverse PTR 1:1 and collides when many
+        // projects share one host IP. The publisher runs from an inlined stub.
+        $this->assertStringContainsString('py3-dbus', $yaml);
+        $this->assertStringContainsString('python3 /pub.py ${SAIL_DOMAIN}', $yaml);
+        $this->assertStringContainsString('base64 -d', $yaml);
+        // The inlined blob must decode to the real CNAME publisher.
+        preg_match('/echo\s+(\S+)\s*\|\s*base64 -d/', $yaml, $m);
+        $decoded = base64_decode($m[1] ?? '', true);
+        $this->assertNotFalse($decoded);
+        $this->assertStringContainsString('EntryGroup', (string) $decoded);
+        $this->assertStringContainsString('GetHostNameFqdn', (string) $decoded);
+        // apk / python failures must surface in `docker logs`, never be silenced.
         $this->assertStringNotContainsString('>/dev/null', $yaml);
         // The mdns sidecar is host-networked, so it must NOT join the shared network.
         $this->assertArrayNotHasKey('networks', $svc);

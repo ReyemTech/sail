@@ -65,6 +65,7 @@ class NetworkCommand extends Command
             $values = $this->applyLanConfig($this->option('ip'), $this->option('domain'), $this->option('resolver'), $this->resolveTlsOption());
             $this->components->info("LAN mode configured: {$values['SAIL_DOMAIN']} -> {$values['SAIL_BIND_IP']}");
             $this->warnIfMdnsUnavailable($values['SAIL_RESOLVER']);
+            $this->warnIfMdnsHostMisrouted($values['SAIL_RESOLVER'], $values['SAIL_BIND_IP']);
 
             return self::SUCCESS;
         }

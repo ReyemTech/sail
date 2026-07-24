@@ -3,6 +3,7 @@
 namespace Laravel\Sail\Console\Concerns;
 
 use Laravel\Sail\Networking\AvahiDetector;
+use Laravel\Sail\Networking\AvahiInterfaceDetector;
 use Laravel\Sail\Networking\HostIpDetector;
 use Laravel\Sail\Networking\HostRegistry;
 use Laravel\Sail\Networking\LanEnvironment;
@@ -450,6 +451,67 @@ trait InteractsWithDockerComposeServices
 
         $this->components->task('Setting up avahi-daemon', function () use ($fix): bool {
             passthru($fix, $exit);
+
+            return $exit === 0;
+        });
+    }
+
+    /**
+     * When mDNS is selected, the sidecar makes <project>.local a CNAME to the
+     * host's own <hostname>.local — so that name MUST resolve to the LAN bind IP.
+     * On a multi-interface Docker host, avahi with no `allow-interfaces` often
+     * answers with a docker-bridge address instead, and <project>.local resolves
+     * to an unreachable IP. Detect that and warn with the exact avahi-daemon.conf
+     * fix, offering to apply it in an interactive terminal. Never fails the command.
+     */
+    protected function warnIfMdnsHostMisrouted(string $resolver, string $bindIp): void
+    {
+        if ($resolver !== 'mdns') {
+            return;
+        }
+
+        $detector = $this->laravel->make(AvahiInterfaceDetector::class);
+
+        if (! $detector->isMisrouted($bindIp)) {
+            return;
+        }
+
+        $host = $detector->hostname();
+        $advertised = $detector->advertisedIpv4();
+        $iface = $detector->interfaceFor($bindIp);
+
+        $this->newLine();
+        $this->components->warn(
+            "mDNS: this host advertises {$advertised} for {$host}.local, but the project binds {$bindIp} — "
+            .'other devices would reach the wrong address.'
+        );
+
+        if ($iface === null) {
+            $this->components->info('Fix: set `allow-interfaces=<your-LAN-nic>` in /etc/avahi/avahi-daemon.conf and restart avahi-daemon.');
+
+            return;
+        }
+
+        $this->components->bulletList(["Restrict avahi to your LAN NIC ({$iface}) so {$host}.local answers with {$bindIp}."]);
+
+        // Idempotent: replace an existing allow-interfaces line, else append under [server].
+        $apply = 'sudo sh -c \'grep -q "^allow-interfaces=" /etc/avahi/avahi-daemon.conf '
+            .'&& sed -i "s/^allow-interfaces=.*/allow-interfaces='.$iface.'/" /etc/avahi/avahi-daemon.conf '
+            .'|| sed -i "/^\[server\]/a allow-interfaces='.$iface.'" /etc/avahi/avahi-daemon.conf\' '
+            .'&& sudo systemctl restart avahi-daemon';
+
+        $this->components->info('Fix: '.$apply);
+
+        if (! $this->input->isInteractive()) {
+            return;
+        }
+
+        if (! $this->confirm("Restrict avahi-daemon to {$iface} now? (needs sudo)", false)) {
+            return;
+        }
+
+        $this->components->task('Restricting avahi-daemon to '.$iface, function () use ($apply): bool {
+            passthru($apply, $exit);
 
             return $exit === 0;
         });

@@ -4,6 +4,7 @@ namespace Laravel\Sail\Tests\Feature;
 
 use Illuminate\Support\Facades\File;
 use Laravel\Sail\Networking\AvahiDetector;
+use Laravel\Sail\Networking\AvahiInterfaceDetector;
 use Laravel\Sail\Tests\TestCase;
 
 class NetworkLanSharedTest extends TestCase
@@ -28,6 +29,9 @@ class NetworkLanSharedTest extends TestCase
         // sidecar wiring, not avahi detection (that lives in AvahiDetectorTest and
         // NetworkMdnsAdvisoryTest). Pretend avahi is available so no warn/prompt fires.
         $this->app->instance(AvahiDetector::class, new AvahiDetector(fn ($cmd) => str_contains($cmd, 'command -v') ? "/usr/sbin/avahi-daemon\n" : "active\n"));
+        // And keep the host-interface (allow-interfaces) check quiet — empty getent
+        // => the host name doesn't resolve => not misrouted (see AvahiInterfaceDetectorTest).
+        $this->app->instance(AvahiInterfaceDetector::class, new AvahiInterfaceDetector(fn ($cmd) => ''));
     }
 
     protected function tearDown(): void
@@ -84,7 +88,10 @@ class NetworkLanSharedTest extends TestCase
 
         $override = File::get($this->home.'/overrides/alpha.yml');
         $this->assertStringContainsString('avahi-publish:', $override);
-        $this->assertStringContainsString('avahi-publish -a ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $override);
+        // Publishes a CNAME (<project>.local -> <host>.local) via the inlined
+        // publisher, runs AppArmor-unconfined so it can reach the system D-Bus.
+        $this->assertStringContainsString('python3 /pub.py ${SAIL_DOMAIN}', $override);
+        $this->assertStringContainsString('apparmor:unconfined', $override);
     }
 
     public function test_switching_resolver_to_mdns_rebuilds_the_domain(): void

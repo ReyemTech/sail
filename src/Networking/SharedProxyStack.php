@@ -44,33 +44,44 @@ class SharedProxyStack
     }
 
     /**
-     * A host-networked sidecar that advertises SAIL_DOMAIN -> SAIL_BIND_IP over
-     * mDNS via the HOST's avahi-daemon. Only emitted when resolver=mdns.
+     * A host-networked sidecar that makes SAIL_DOMAIN resolve to the host's LAN IP
+     * over mDNS via the HOST's avahi-daemon. Only emitted when resolver=mdns.
      *
-     * HOST PREREQUISITE: avahi-daemon must be installed AND running on the host
-     * (`sudo apt install -y avahi-daemon`). avahi-publish is a *client* — it does
-     * not itself answer mDNS; it registers the record with the host daemon over
-     * the D-Bus system bus (the load-bearing mount below is /run/dbus). Without a
-     * running host daemon the container exits and restart-loops (visible in
-     * `docker logs`), and <project>.local will not resolve.
+     * It publishes a CNAME (SAIL_DOMAIN -> <host>.local), NOT an A record. An A
+     * record (avahi-publish -a) owns the reverse PTR for the address 1:1, so it
+     * collides the moment a second project points at the same shared proxy IP —
+     * and collides immediately on the host's own IP. A CNAME has no PTR, so every
+     * project can alias the one host name, which itself resolves to the LAN IP.
      *
-     * `network_mode: host` is required so the registration reaches the daemon and
-     * is announced on the real LAN interface. SAIL_DOMAIN / SAIL_BIND_IP are
-     * interpolated from .env at compose time. apk/avahi errors are NOT silenced so
-     * failures surface in `docker logs <project>-avahi-publish-1`.
+     * HOST PREREQUISITES (both detected + offered by `sail:network --resolver=mdns`):
+     *   1. avahi-daemon installed AND running (the publisher is only a D-Bus
+     *      client; the load-bearing mount is /run/dbus).
+     *   2. avahi advertising the host's <hostname>.local on the LAN interface
+     *      (`allow-interfaces=<lan>` in avahi-daemon.conf) — on multi-bridge Docker
+     *      hosts it otherwise answers with a 172.x docker address.
+     *
+     * `network_mode: host` reaches the daemon and announces on the real LAN NIC.
+     * `security_opt: apparmor:unconfined` is REQUIRED: dbus-daemon's AppArmor
+     * mediation denies the default `docker-default` profile from the system bus
+     * ("Access denied" on the very first Hello). The publisher script is inlined
+     * (base64) from the mdns-cname-publish.py stub so the override is self-contained.
+     * apk/python errors are NOT silenced so failures surface in `docker logs`.
      */
     private function avahiSidecar(): string
     {
+        $script = base64_encode((string) file_get_contents(__DIR__.'/../../stubs/mdns-cname-publish.py'));
+
         return <<<YAML
 
             avahi-publish:
                 image: alpine:3
                 restart: unless-stopped
                 network_mode: host
-                command: sh -c "apk add --no-cache avahi-tools && exec avahi-publish -a \${SAIL_DOMAIN} \${SAIL_BIND_IP}"
+                security_opt:
+                    - apparmor:unconfined
+                command: sh -c "apk add --no-cache python3 py3-dbus && echo {$script} | base64 -d > /pub.py && exec python3 /pub.py \${SAIL_DOMAIN}"
                 volumes:
                     - /run/dbus:/run/dbus
-                    - /var/run/avahi-daemon:/var/run/avahi-daemon
         YAML;
     }
 }

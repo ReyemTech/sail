@@ -176,17 +176,38 @@ mDNS mode:
   it also offers to install/start it for you), and `sail up` repeats the reminder
   on every start while mDNS is selected. It never blocks — mDNS is opt-in and
   `--resolver=nip` needs zero host setup.
+- **Second host prerequisite (multi-interface hosts):** the sidecar publishes
+  `<project>.local` as a **CNAME to the host's own `<hostname>.local`**, so that
+  name must resolve to your **LAN** IP. On a machine with several interfaces
+  (Docker bridges, tailscale, VPNs), avahi with no `allow-interfaces` often answers
+  `<hostname>.local` with a `172.x` Docker address instead — and `<project>.local`
+  then resolves somewhere unreachable. Restrict avahi to your LAN NIC:
+
+  ```ini
+  # /etc/avahi/avahi-daemon.conf  →  under [server]
+  allow-interfaces=<your-LAN-nic>          # e.g. wlp2s0 / eth0
+  ```
+
+  then `sudo systemctl restart avahi-daemon`. This is detected too:
+  `sail:network --resolver=mdns` warns when `<hostname>.local` resolves to a
+  non-LAN IP and, interactively, **offers to apply the `allow-interfaces` fix** for
+  you (deriving the NIC from your bind IP). macOS/Bonjour handles this itself.
 - **Verify resolution** from any machine on the LAN once `sail up` is running:
 
   ```bash
-  avahi-resolve -n <project>.local        # should print <project>.local <SAIL_BIND_IP>
+  getent hosts <project>.local            # what the browser uses -> should print your LAN IP
+  avahi-resolve -n <project>.local        # (if avahi-utils is installed)
   ```
 
   If it fails, check the sidecar logs: `docker logs <project>-avahi-publish-1`
   (apk/avahi errors are surfaced there, not silenced).
-- Adds an `avahi-publish` sidecar (host-networked) to the project's compose
-  override that advertises `<project>.local` → your `SAIL_BIND_IP` to other
-  devices via the host daemon.
+- Adds a host-networked mDNS sidecar to the project's compose override that
+  publishes `<project>.local` as a **CNAME to `<hostname>.local`** via the host
+  daemon (a CNAME, not an A record: an A record owns the address's reverse PTR
+  1:1, so it can't map several projects onto the one shared-proxy IP and collides
+  on the host's own address). The sidecar runs AppArmor-unconfined — dbus-daemon's
+  AppArmor mediation otherwise denies the `docker-default` profile the system-bus
+  access `avahi` needs.
 - **Android caveat:** many Android devices don't resolve `.local` names
   reliably — use nip.io for those clients.
 
