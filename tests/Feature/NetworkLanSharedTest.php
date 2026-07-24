@@ -3,6 +3,7 @@
 namespace Laravel\Sail\Tests\Feature;
 
 use Illuminate\Support\Facades\File;
+use Laravel\Sail\Networking\AvahiDetector;
 use Laravel\Sail\Tests\TestCase;
 
 class NetworkLanSharedTest extends TestCase
@@ -23,6 +24,10 @@ class NetworkLanSharedTest extends TestCase
         // Named compose.yaml (the fork's first-detected default) rather than
         // docker-compose.yml, so SAIL_FILES must derive the base name dynamically.
         File::put($this->base.'/compose.yaml', "services:\n  laravel: {}\n  mysql: {}\n  redis: {}\n");
+        // Keep the mDNS advisory host-independent: these tests assert domain /
+        // sidecar wiring, not avahi detection (that lives in AvahiDetectorTest and
+        // NetworkMdnsAdvisoryTest). Pretend avahi is available so no warn/prompt fires.
+        $this->app->instance(AvahiDetector::class, new AvahiDetector(fn ($cmd) => str_contains($cmd, 'command -v') ? "/usr/sbin/avahi-daemon\n" : "active\n"));
     }
 
     protected function tearDown(): void

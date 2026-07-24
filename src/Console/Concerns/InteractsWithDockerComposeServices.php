@@ -2,6 +2,7 @@
 
 namespace Laravel\Sail\Console\Concerns;
 
+use Laravel\Sail\Networking\AvahiDetector;
 use Laravel\Sail\Networking\HostIpDetector;
 use Laravel\Sail\Networking\HostRegistry;
 use Laravel\Sail\Networking\LanEnvironment;
@@ -381,6 +382,54 @@ trait InteractsWithDockerComposeServices
         $writer->write();
 
         return $values;
+    }
+
+    /**
+     * When the mDNS resolver is selected, verify the host is actually advertising
+     * <project>.local (a running avahi-daemon). If not, warn with the exact fix —
+     * and, in an interactive terminal, offer to install/start it. Never fails the
+     * command: mDNS is opt-in and the fallback (--resolver=nip) needs no host setup.
+     */
+    protected function warnIfMdnsUnavailable(string $resolver): void
+    {
+        if ($resolver !== 'mdns') {
+            return;
+        }
+
+        $status = $this->laravel->make(AvahiDetector::class)->status();
+
+        if ($status === AvahiDetector::AVAILABLE) {
+            return;
+        }
+
+        $fix = $status === AvahiDetector::NOT_RUNNING
+            ? 'sudo systemctl enable --now avahi-daemon'
+            : 'sudo apt install -y avahi-daemon && sudo systemctl enable --now avahi-daemon';
+
+        $reason = $status === AvahiDetector::NOT_RUNNING
+            ? 'avahi-daemon is installed but not running'
+            : 'avahi-daemon is not installed on this host';
+
+        $this->newLine();
+        $this->components->warn('mDNS selected, but nothing is advertising <project>.local yet — '.$reason.'.');
+        $this->components->bulletList(['Fix: '.$fix]);
+        $this->components->info('Prefer zero host setup? Re-run with --resolver=nip instead.');
+
+        // Only offer to run the fix in a real terminal; CI / non-TTY just gets the
+        // warning above (auto-running sudo unattended would be surprising).
+        if (! $this->input->isInteractive()) {
+            return;
+        }
+
+        if (! $this->confirm('Install/start avahi-daemon now? (needs sudo)', false)) {
+            return;
+        }
+
+        $this->components->task('Setting up avahi-daemon', function () use ($fix): bool {
+            passthru($fix, $exit);
+
+            return $exit === 0;
+        });
     }
 
     /**

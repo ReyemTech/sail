@@ -3,6 +3,7 @@
 namespace Laravel\Sail\Tests\Feature;
 
 use Illuminate\Support\Facades\File;
+use Laravel\Sail\Networking\AvahiDetector;
 use Laravel\Sail\Tests\TestCase;
 
 class NetworkLanDirectTest extends TestCase
@@ -20,6 +21,9 @@ class NetworkLanDirectTest extends TestCase
         chdir($this->base);
         putenv('SAIL_HOME='.$this->home);
         File::put($this->base.'/compose.yaml', "services:\n  laravel: {}\n  mysql: {}\n  redis: {}\n");
+        // Keep the mDNS advisory host-independent (see NetworkMdnsAdvisoryTest for
+        // the detection behavior): pretend avahi is available so no warn/prompt fires.
+        $this->app->instance(AvahiDetector::class, new AvahiDetector(fn ($cmd) => str_contains($cmd, 'command -v') ? "/usr/sbin/avahi-daemon\n" : "active\n"));
     }
 
     protected function tearDown(): void

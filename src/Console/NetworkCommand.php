@@ -64,6 +64,7 @@ class NetworkCommand extends Command
         if ($mode === 'lan') {
             $values = $this->applyLanConfig($this->option('ip'), $this->option('domain'), $this->option('resolver'), $this->resolveTlsOption());
             $this->components->info("LAN mode configured: {$values['SAIL_DOMAIN']} -> {$values['SAIL_BIND_IP']}");
+            $this->warnIfMdnsUnavailable($values['SAIL_RESOLVER']);
 
             return self::SUCCESS;
         }
@@ -79,6 +80,7 @@ class NetworkCommand extends Command
 
             $this->components->info("lan-direct mode configured: {$values['SAIL_DOMAIN']} -> {$values['SAIL_BIND_IP']}");
             $this->components->warn('lan-direct aliases a dedicated LAN IP onto the host NIC (Linux/macOS, needs sudo; NOT Docker-Desktop-compatible). Run "sail up" to apply.');
+            $this->warnIfMdnsUnavailable($values['SAIL_RESOLVER']);
 
             return self::SUCCESS;
         }

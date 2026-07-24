@@ -170,6 +170,12 @@ mDNS mode:
   ```
 
   macOS already provides mDNS via Bonjour — no daemon to install.
+
+  You don't have to remember this: `sail:network --resolver=mdns` **detects** a
+  missing/stopped daemon and warns with the exact fix (in an interactive terminal
+  it also offers to install/start it for you), and `sail up` repeats the reminder
+  on every start while mDNS is selected. It never blocks — mDNS is opt-in and
+  `--resolver=nip` needs zero host setup.
 - **Verify resolution** from any machine on the LAN once `sail up` is running:
 
   ```bash

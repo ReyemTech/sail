@@ -439,6 +439,19 @@ elif [ "$1" == "up" ]; then
         php artisan sail:proxy up >/dev/null 2>&1 || true
     fi
 
+    # mDNS (<project>.local) needs a running host avahi-daemon reachable by the
+    # sidecar; the container cannot supply it. Remind (don't block) if it's absent
+    # so the domain doesn't just resolve to nothing. sail:network already warns at
+    # opt-in — this is the every-start safety net. Linux only (macOS ships Bonjour).
+    SAIL_RESOLVER_UP=$(grep -E '^SAIL_RESOLVER=' .env 2>/dev/null | cut -d '=' -f2 | tr -d '"')
+    if [ "$SAIL_RESOLVER_UP" = "mdns" ] && [ "$(uname -s)" = "Linux" ]; then
+        if ! command -v avahi-daemon >/dev/null 2>&1 || [ "$(systemctl is-active avahi-daemon 2>/dev/null)" != "active" ]; then
+            echo "sail: mDNS is selected but no running avahi-daemon was found; <project>.local will not resolve." >&2
+            echo "sail:   fix -> sudo apt install -y avahi-daemon && sudo systemctl enable --now avahi-daemon" >&2
+            echo "sail:   or  -> sail network --mode=lan --resolver=nip   (zero host setup)" >&2
+        fi
+    fi
+
     BAKE_CMD="docker buildx bake -f ${RUNTIME_DIR}/docker-bake.hcl app"
     if ! docker image inspect "$ORG/$APP_NAME:$VERSION" > /dev/null 2>&1; then
         echo "Docker image $ORG/$APP_NAME:$VERSION does not exist. Building the image..." >&2
