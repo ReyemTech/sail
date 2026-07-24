@@ -15,7 +15,7 @@ services:
         expose:
             - 80
         ports:
-            - '${SAIL_IP:-172.20.0.10}:${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+            - '${SAIL_BIND_IP:-172.20.0.10}:${VITE_PORT:-5173}:${VITE_PORT:-5173}'
         environment:
             - SUPERVISOR_PHP_USER='sail'
             - WWWUSER='${WWWUSER}'
@@ -36,8 +36,8 @@ services:
         labels:
             - com.github.nginx-proxy.nginx-proxy
         ports:
-            - "${SAIL_IP:-172.20.0.10}:80:80"
-            - "${SAIL_IP:-172.20.0.10}:443:443"
+            - "${SAIL_BIND_IP:-172.20.0.10}:80:80"
+            - "${SAIL_BIND_IP:-172.20.0.10}:443:443"
         volumes:
             - /var/run/docker.sock:/tmp/docker.sock:ro
             - nginx_vhost:/etc/nginx/vhost.d

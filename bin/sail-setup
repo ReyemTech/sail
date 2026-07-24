@@ -2,7 +2,26 @@
 
 UNAMEOUT="$(uname -s)"
 DOMAIN=$(grep -E '^APP_URL=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
-SAIL_IP=$(grep -E '^SAIL_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+SAIL_IP=$(grep -E '^SAIL_BIND_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+if [ -z "$SAIL_IP" ]; then
+    SAIL_IP=$(grep -E '^SAIL_IP=' .env | cut -d '=' -f2 | sed 's|http[s]*://||' | cut -d '/' -f1 | tr -d '"')
+fi
+SAIL_NETWORK_MODE=$(grep -E '^SAIL_NETWORK_MODE=' .env | cut -d '=' -f2 | tr -d '"')
+SAIL_NETWORK_MODE=${SAIL_NETWORK_MODE:-local}
+SAIL_NETWORK_TLS=$(grep -E '^SAIL_NETWORK_TLS=' .env | cut -d '=' -f2 | tr -d '"')
+SAIL_NETWORK_TLS=${SAIL_NETWORK_TLS:-true}
+SAIL_HOME_DIR=${SAIL_HOME:-"$HOME/.config/sail"}
+# Only the shared 'lan' mode multiplexes projects behind one proxy that mounts a
+# shared certs dir. 'local' and 'lan-direct' each run their OWN per-project
+# nginx-proxy (compose.stub), which mounts the vendor certs dir.
+if [ "$SAIL_NETWORK_MODE" = "lan" ]; then
+    SHARED_CERTS=1
+    CERT_TARGET="$SAIL_HOME_DIR/certs"
+    mkdir -p "$CERT_TARGET"
+else
+    SHARED_CERTS=0
+    CERT_TARGET="vendor/reyemtech/sail/certs"
+fi
 
 # Verify operating system is supported...
 case "${UNAMEOUT}" in
@@ -83,6 +102,46 @@ function create_ip_alias {
             info "IP alias already exists:" "$SAIL_IP"
         fi
     fi
+}
+
+function create_lan_ip_alias {
+    header "Creating LAN IP alias for $SAIL_IP"
+
+    # lan-direct binds a DISTINCT real LAN IP per project by aliasing it onto the
+    # host's default-route interface (NOT loopback), so other devices reach it on
+    # standard ports. Requires root; not Docker-Desktop-compatible.
+    if [ -z "$SAIL_IP" ]; then
+        error "SAIL_IP is not defined in the .env file. Exiting."
+        exit 1
+    fi
+
+    if [ "$MACHINE" == "mac" ]; then
+        LAN_IFACE=$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')
+        if [ -z "$LAN_IFACE" ]; then
+            error "Could not determine the default LAN interface. Alias $SAIL_IP manually."
+            exit 1
+        fi
+        if ifconfig "$LAN_IFACE" 2>/dev/null | grep -q "$SAIL_IP"; then
+            info "LAN IP alias already exists on $LAN_IFACE:" "$SAIL_IP"
+        else
+            sudo ifconfig "$LAN_IFACE" alias "$SAIL_IP"
+            success "LAN IP alias created on $LAN_IFACE:" "$SAIL_IP"
+        fi
+    elif [ "$MACHINE" == "linux" ]; then
+        LAN_IFACE=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
+        if [ -z "$LAN_IFACE" ]; then
+            error "Could not determine the default LAN interface. Alias $SAIL_IP manually."
+            exit 1
+        fi
+        if ip addr show dev "$LAN_IFACE" 2>/dev/null | grep -q "$SAIL_IP"; then
+            info "LAN IP alias already exists on $LAN_IFACE:" "$SAIL_IP"
+        else
+            sudo ip addr add "$SAIL_IP"/24 dev "$LAN_IFACE"
+            success "LAN IP alias created on $LAN_IFACE:" "$SAIL_IP"
+        fi
+    fi
+
+    info "lan-direct: skipping /etc/hosts ($DOMAIN resolves via nip.io/.local)." ""
 }
 
 function add_hosts_entry {
@@ -167,15 +226,21 @@ function generate_certificates {
     header "Generating SSL certificates for $DOMAIN"
     # Generate SSL certificates for the host machine using mkcert...
 
-    CERT_FOLDER="vendor/reyemtech/sail/certs"
+    CERT_FOLDER="$CERT_TARGET"
 
     if [ ! -f "$CERT_FOLDER/$DOMAIN.crt" ] || [ ! -f "$CERT_FOLDER/$DOMAIN.key" ] ||
         ! openssl x509 -checkend 86400 -noout -in "$CERT_FOLDER/$DOMAIN.crt" >/dev/null 2>&1; then
         [ -d "$CERT_FOLDER" ] || mkdir -p "$CERT_FOLDER"
         mkcert -install >/dev/null 2>&1
         mkcert -cert-file "$CERT_FOLDER/$DOMAIN.crt" -key-file "$CERT_FOLDER/$DOMAIN.key" "$DOMAIN" "minio" >/dev/null 2>&1
-        cp "$CERT_FOLDER/$DOMAIN.crt" "$CERT_FOLDER/public.crt"
-        cp "$CERT_FOLDER/$DOMAIN.key" "$CERT_FOLDER/private.key"
+        # In shared lan mode the certs dir is shared across projects, so the
+        # generic public.crt/private.key would collide (last project wins). Only
+        # the per-domain <domain>.crt/.key are written there; per-project modes
+        # (local, lan-direct) keep the generic pair for their runtime mount.
+        if [ "$SHARED_CERTS" = "0" ]; then
+            cp "$CERT_FOLDER/$DOMAIN.crt" "$CERT_FOLDER/public.crt"
+            cp "$CERT_FOLDER/$DOMAIN.key" "$CERT_FOLDER/private.key"
+        fi
         cp "$(mkcert -CAROOT)/rootCA.pem" "$CERT_FOLDER/mkcert-rootCA.pem"
 
         success "Certificates created or renewed successfully in the ${NC}$CERT_FOLDER${GREEN} folder."
@@ -183,13 +248,15 @@ function generate_certificates {
         info "Certificates are valid and not expired. Skipping creation."
     fi
 
-    LINK_FOLDERS=(
-        "vendor/reyemtech/sail/runtimes/8.x"
-    )
-    for folder in "${LINK_FOLDERS[@]}"; do
-        rm -rf "$(pwd)/$folder/certs"
-        cp -fr "$(pwd)/$CERT_FOLDER" "$(pwd)/$folder"
-    done
+    if [ "$SHARED_CERTS" = "0" ]; then
+        LINK_FOLDERS=(
+            "vendor/reyemtech/sail/runtimes/8.x"
+        )
+        for folder in "${LINK_FOLDERS[@]}"; do
+            rm -rf "$(pwd)/$folder/certs"
+            cp -fr "$(pwd)/$CERT_FOLDER" "$(pwd)/$folder"
+        done
+    fi
 }
 
 function link_application {
@@ -205,8 +272,21 @@ function link_application {
 
 install_brew
 install_docker
-add_hosts_entry
-generate_certificates
+if [ "$SAIL_NETWORK_MODE" = "local" ]; then
+    add_hosts_entry
+elif [ "$SAIL_NETWORK_MODE" = "lan-direct" ]; then
+    create_lan_ip_alias
+else
+    echo "${GREEN}LAN mode: skipping loopback alias and /etc/hosts (binding ${SAIL_IP}, domain ${DOMAIN}).${NC}" >&2
+fi
+case "$SAIL_NETWORK_TLS" in
+false | 0 | no | off | FALSE | False | NO | Off | OFF)
+    echo "${GREEN}Plain-HTTP mode (SAIL_NETWORK_TLS=${SAIL_NETWORK_TLS}): skipping mkcert certificate generation.${NC}" >&2
+    ;;
+*)
+    generate_certificates
+    ;;
+esac
 # link_application
 
 echo ""

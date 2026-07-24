@@ -1,12 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Method Laravel\\Sail\\Console\\AddCommand\:\:replaceEnvVariables\(\) invoked with 1 parameter, 2 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: src/Console/AddCommand.php
-
-		-
 			message: '#^Method Laravel\\Sail\\Console\\AddCommand\:\:runSetup\(\) should return string but return statement is missing\.$#'
 			identifier: return.missing
 			count: 1
@@ -41,6 +35,12 @@ parameters:
 			identifier: return.missing
 			count: 1
 			path: src/Console/InstallCommand.php
+
+		-
+			message: '#^Method Laravel\\Sail\\Console\\NetworkCommand\:\:runSetup\(\) should return string but return statement is missing\.$#'
+			identifier: return.missing
+			count: 1
+			path: src/Console/NetworkCommand.php
 
 		-
 			message: '#^Method Laravel\\Sail\\Console\\PublishCommand\:\:runSetup\(\) should return string but return statement is missing\.$#'

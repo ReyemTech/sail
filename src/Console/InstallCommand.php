@@ -21,7 +21,12 @@ class InstallCommand extends Command
     protected $signature = 'sail:install
                 {--with= : The services that should be included in the installation}
                 {--devcontainer : Create a .devcontainer configuration directory}
-                {--php=8.5 : The PHP version that should be used}';
+                {--php=8.5 : The PHP version that should be used}
+                {--mode= : Networking mode after install: local (default), lan, or lan-direct}
+                {--ip= : LAN IP to bind to (lan/lan-direct mode)}
+                {--resolver= : LAN name resolver: nip (default) or mdns (.local)}
+                {--tls : Issue a trusted (mkcert) certificate — the default}
+                {--no-tls : Serve plain HTTP; skip certificate generation}';
 
     /**
      * The console command description.
@@ -62,6 +67,24 @@ class InstallCommand extends Command
 
         if ($this->option('devcontainer')) {
             $this->installDevContainer();
+        }
+
+        if ($this->option('mode') === 'lan') {
+            try {
+                $this->applyLanConfig($this->option('ip'), null, $this->option('resolver'), $this->resolveTlsOption());
+                $this->components->info('LAN mode configured. Import the mkcert root CA on client devices to trust the certificate.');
+            } catch (\RuntimeException $e) {
+                $this->components->error($e->getMessage());
+                $this->components->warn('Skipping LAN configuration; run "sail artisan sail:network --mode=lan --ip=<address>" after install.');
+            }
+        } elseif ($this->option('mode') === 'lan-direct') {
+            try {
+                $this->applyLanDirectConfig($this->option('ip'), null, $this->option('resolver'), $this->resolveTlsOption());
+                $this->components->info('lan-direct mode configured. This project will bind its own dedicated LAN IP (Linux/macOS only; not Docker Desktop).');
+            } catch (\RuntimeException $e) {
+                $this->components->error($e->getMessage());
+                $this->components->warn('Skipping lan-direct configuration; run "sail artisan sail:network --mode=lan-direct --ip=<address>" after install.');
+            }
         }
 
         $this->prepareInstallation($services);

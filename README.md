@@ -115,6 +115,177 @@ Make sure the target directory is on your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc
 ```
 
+## Running on a LAN server
+
+By default Sail binds to a host-local address, so a project is only reachable
+on the machine running it. To reach it from other devices on your network
+(laptop, phone), enable **LAN mode**:
+
+```bash
+# On the server, after install:
+sail artisan sail:network --mode=lan          # auto-detects the LAN IP
+# or pin the IP / domain explicitly:
+sail artisan sail:network --mode=lan --ip=192.168.1.50
+sail artisan sail:network --mode=lan --domain=dev.example.lan
+
+sail up
+```
+
+LAN mode:
+- Binds published ports to your server's LAN IP.
+- Uses a `nip.io` domain (`<project>.<lan-ip>.nip.io`) that resolves from any
+  device on the network — no `/etc/hosts` editing required, and it works on
+  Android where mDNS/`.local` does not.
+- Generates a trusted certificate with **mkcert**. To avoid TLS warnings on
+  your other devices, import the mkcert root CA
+  (`vendor/reyemtech/sail/certs/mkcert-rootCA.pem`) into each device's trust
+  store once.
+
+Return to local-only mode with `sail artisan sail:network --mode=local`.
+
+### Choosing a name resolver
+
+By default LAN mode uses **nip.io** (`<project>.<lan-ip>.nip.io`), which needs
+no extra host services and resolves everywhere — including Android, where
+mDNS/`.local` is unreliable. This is why nip.io stays the default.
+
+If you prefer a clean `<project>.local` name, opt into the **mDNS** resolver:
+
+```bash
+sail artisan sail:network --mode=lan --resolver=mdns   # <project>.local
+sail artisan sail:network --mode=lan --resolver=nip    # <project>.<ip>.nip.io (default)
+```
+
+mDNS mode:
+
+- **Host prerequisite (required):** `avahi-daemon` must be **installed and
+  running** on the Linux host. The `avahi-publish` sidecar is only a *client* —
+  it registers the record with the host daemon over the D-Bus system bus; it
+  does not itself answer mDNS. Without a running daemon the sidecar just
+  restart-loops and `<project>.local` never resolves.
+
+  ```bash
+  sudo apt install -y avahi-daemon        # Debian/Ubuntu
+  sudo systemctl enable --now avahi-daemon
+  ```
+
+  macOS already provides mDNS via Bonjour — no daemon to install.
+
+  You don't have to remember this: `sail:network --resolver=mdns` **detects** a
+  missing/stopped daemon and warns with the exact fix (in an interactive terminal
+  it also offers to install/start it for you), and `sail up` repeats the reminder
+  on every start while mDNS is selected. It never blocks — mDNS is opt-in and
+  `--resolver=nip` needs zero host setup.
+- **Second host prerequisite (multi-interface hosts):** the sidecar publishes
+  `<project>.local` as a **CNAME to the host's own `<hostname>.local`**, so that
+  name must resolve to your **LAN** IP. On a machine with several interfaces
+  (Docker bridges, tailscale, VPNs), avahi with no `allow-interfaces` often answers
+  `<hostname>.local` with a `172.x` Docker address instead — and `<project>.local`
+  then resolves somewhere unreachable. Restrict avahi to your LAN NIC:
+
+  ```ini
+  # /etc/avahi/avahi-daemon.conf  →  under [server]
+  allow-interfaces=<your-LAN-nic>          # e.g. wlp2s0 / eth0
+  ```
+
+  then `sudo systemctl restart avahi-daemon`. This is detected too:
+  `sail:network --resolver=mdns` warns when `<hostname>.local` resolves to a
+  non-LAN IP and, interactively, **offers to apply the `allow-interfaces` fix** for
+  you (deriving the NIC from your bind IP). macOS/Bonjour handles this itself.
+- **Verify resolution** from any machine on the LAN once `sail up` is running:
+
+  ```bash
+  getent hosts <project>.local            # what the browser uses -> should print your LAN IP
+  avahi-resolve -n <project>.local        # (if avahi-utils is installed)
+  ```
+
+  If it fails, check the sidecar logs: `docker logs <project>-avahi-publish-1`
+  (apk/avahi errors are surfaced there, not silenced).
+- Adds a host-networked mDNS sidecar to the project's compose override that
+  publishes `<project>.local` as a **CNAME to `<hostname>.local`** via the host
+  daemon (a CNAME, not an A record: an A record owns the address's reverse PTR
+  1:1, so it can't map several projects onto the one shared-proxy IP and collides
+  on the host's own address). The sidecar runs AppArmor-unconfined — dbus-daemon's
+  AppArmor mediation otherwise denies the `docker-default` profile the system-bus
+  access `avahi` needs.
+- **Android caveat:** many Android devices don't resolve `.local` names
+  reliably — use nip.io for those clients.
+
+Once resolved, `.local` and nip.io projects share the same LAN reverse proxy and
+mkcert certificates described below.
+
+### Multiple projects on one server
+
+LAN mode uses a single shared reverse proxy so any number of projects can run
+at once, each reachable at its own `nip.io` domain:
+
+```bash
+# In each project:
+sail artisan sail:network --mode=lan
+sail up      # auto-starts the shared proxy the first time
+```
+
+- Web traffic for every project is routed by domain through one shared proxy on
+  `:80/:443` — no port juggling for the web apps.
+- Each project's database/cache is published on a **unique** host port
+  (e.g. project A MySQL `3306`, project B `3316`) so they don't collide; run
+  `sail artisan sail:network --status` to see the assigned ports.
+- Certificates live in a shared dir (`~/.config/sail/certs`); import the mkcert
+  root CA (`~/.config/sail/certs/mkcert-rootCA.pem`) on client devices once.
+- Manage the shared proxy directly with `sail artisan sail:proxy up|down|status`.
+
+Return any project to local-only mode with `sail artisan sail:network --mode=local`.
+
+### One dedicated LAN IP per project (`lan-direct`)
+
+If you'd rather **not** share a proxy and want each project on its own real LAN
+IP with the standard ports (`80/443/3306/…`) — no port juggling, no shared
+network — use **`lan-direct`** mode. Each project runs its own `nginx-proxy`
+bound to a distinct address you reserve on your LAN:
+
+```bash
+# Reserve a free address on your LAN subnet for THIS project, then:
+sail artisan sail:network --mode=lan-direct --ip=192.168.1.61
+sail up      # sail-setup aliases the IP onto your LAN NIC (needs sudo)
+```
+
+- Each project needs its **own** dedicated IP (`--ip` is required). Pick free
+  addresses on your LAN subnet — ideally outside your router's DHCP pool so they
+  aren't handed to other devices.
+- The IP is aliased onto your host's **default-route (LAN) interface**, so the
+  project is reachable from any device at `http(s)://<project>.<ip>.nip.io` on
+  standard ports.
+- **Use the nip.io resolver here.** The mDNS sidecar that advertises
+  `<project>.local` belongs to shared `lan` mode; `lan-direct` runs its own
+  per-project proxy and publishes **no** mDNS record — so `--resolver=mdns` would
+  set a `.local` domain that nothing answers for.
+- **Linux/macOS only, and NOT Docker-Desktop-compatible:** aliasing an IP onto
+  the host NIC needs root and a real host network interface. Docker Desktop's
+  VM-based networking can't publish to a NIC-aliased host IP. Use `lan` (shared
+  proxy) on Docker Desktop.
+- No `/etc/hosts` edits are needed — nip.io resolves on its own.
+- Certificates use the per-project `vendor/reyemtech/sail/certs` dir (same as
+  local); import its `mkcert-rootCA.pem` on client devices.
+
+Switch back with `sail artisan sail:network --mode=local`.
+
+### Plain HTTP (no TLS)
+
+By default every exposed mode issues a trusted **mkcert** certificate and serves
+HTTPS. If you'd rather serve **plain HTTP** (e.g. quick throwaway testing, or a
+device you can't install the root CA on), add `--no-tls`:
+
+```bash
+sail artisan sail:network --mode=lan --no-tls          # shared proxy, HTTP
+sail artisan sail:network --mode=lan-direct --ip=192.168.1.61 --no-tls
+sail artisan sail:network --mode=lan --tls             # back to HTTPS (default)
+```
+
+With TLS off, `APP_URL`/`VITE_DEV_SERVER_URL` use `http://` and `sail-setup`
+skips mkcert entirely — `nginx-proxy` serves plain HTTP on `:80`. TLS stays
+**on by default**, so existing setups are unaffected. `--tls`/`--no-tls` are
+also available on `sail install`.
+
 ## Building images + Helm charts
 
 `sail:build` builds multi-arch images via Docker Bake and generates the Helm chart in one step:

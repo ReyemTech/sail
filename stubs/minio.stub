@@ -1,8 +1,8 @@
 minio:
     image: 'minio/minio:latest'
     ports:
-        - '${SAIL_IP:-172.20.0.10}:${FORWARD_MINIO_PORT:-9000}:9000'
-        - '${SAIL_IP:-172.20.0.10}:${FORWARD_MINIO_CONSOLE_PORT:-8900}:8900'
+        - '${SAIL_BIND_IP:-172.20.0.10}:${FORWARD_MINIO_PORT:-9000}:9000'
+        - '${SAIL_BIND_IP:-172.20.0.10}:${FORWARD_MINIO_CONSOLE_PORT:-8900}:8900'
     environment:
         MINIO_ROOT_USER: 'sail'
         MINIO_ROOT_PASSWORD: 'minio123'
