@@ -1,5 +1,14 @@
 # Release Notes
 
+## [3.5.2](https://github.com/ReyemTech/sail/compare/v3.5.1...v3.5.2) (2026-07-24)
+
+
+### Bug Fixes
+
+* **redis:** resolve AAAA-only Sentinel masters (IPv6 clusters) ([55801fc](https://github.com/ReyemTech/sail/commit/55801fcd896f38b6fa04e13f9ff4ed51ef083a5e))
+* **redis:** tolerate transient DNS failures in the Sentinel connector ([0dae594](https://github.com/ReyemTech/sail/commit/0dae594211a23f65ff5e080dbe43b0665c98f7c0))
+* **redis:** tolerate transient DNS failures in the Sentinel connector ([47584eb](https://github.com/ReyemTech/sail/commit/47584eb56621a26a4d9872a3ff15db2b9e9d440b))
+
 ## [3.5.1](https://github.com/ReyemTech/sail/compare/v3.5.0...v3.5.1) (2026-07-24)
 
 
