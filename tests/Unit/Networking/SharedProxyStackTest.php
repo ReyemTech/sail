@@ -58,14 +58,18 @@ class SharedProxyStackTest extends TestCase
         // avahi-publish -a owns the reverse PTR 1:1 and collides when many
         // projects share one host IP. The publisher runs from an inlined stub.
         $this->assertStringContainsString('py3-dbus', $yaml);
+        // PyGObject provides the GLib main loop the resilient publisher runs on.
+        $this->assertStringContainsString('py3-gobject3', $yaml);
         $this->assertStringContainsString('python3 /pub.py ${SAIL_DOMAIN}', $yaml);
         $this->assertStringContainsString('base64 -d', $yaml);
-        // The inlined blob must decode to the real CNAME publisher.
+        // The inlined blob must decode to the real CNAME publisher, and it must
+        // re-register across avahi-daemon restarts (NameOwnerChanged watcher).
         preg_match('/echo\s+(\S+)\s*\|\s*base64 -d/', $yaml, $m);
         $decoded = base64_decode($m[1] ?? '', true);
         $this->assertNotFalse($decoded);
         $this->assertStringContainsString('EntryGroup', (string) $decoded);
         $this->assertStringContainsString('GetHostNameFqdn', (string) $decoded);
+        $this->assertStringContainsString('NameOwnerChanged', (string) $decoded);
         // apk / python failures must surface in `docker logs`, never be silenced.
         $this->assertStringNotContainsString('>/dev/null', $yaml);
         // The mdns sidecar is host-networked, so it must NOT join the shared network.

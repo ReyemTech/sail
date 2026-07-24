@@ -64,8 +64,10 @@ class SharedProxyStack
      * `security_opt: apparmor:unconfined` is REQUIRED: dbus-daemon's AppArmor
      * mediation denies the default `docker-default` profile from the system bus
      * ("Access denied" on the very first Hello). The publisher script is inlined
-     * (base64) from the mdns-cname-publish.py stub so the override is self-contained.
-     * apk/python errors are NOT silenced so failures surface in `docker logs`.
+     * (base64) from the mdns-cname-publish.py stub so the override is self-contained;
+     * it stays resident and re-registers across avahi-daemon restarts (e.g. when
+     * Sail applies the allow-interfaces host fix). apk/python errors are NOT silenced
+     * so failures surface in `docker logs`.
      */
     private function avahiSidecar(): string
     {
@@ -79,7 +81,7 @@ class SharedProxyStack
                 network_mode: host
                 security_opt:
                     - apparmor:unconfined
-                command: sh -c "apk add --no-cache python3 py3-dbus && echo {$script} | base64 -d > /pub.py && exec python3 /pub.py \${SAIL_DOMAIN}"
+                command: sh -c "apk add --no-cache python3 py3-dbus py3-gobject3 && echo {$script} | base64 -d > /pub.py && exec python3 /pub.py \${SAIL_DOMAIN}"
                 volumes:
                     - /run/dbus:/run/dbus
         YAML;
