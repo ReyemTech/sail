@@ -221,6 +221,15 @@ trait InteractsWithDockerComposeServices
     }
 
     /**
+     * Detect the host's LAN IP. A seam so tests can inject a deterministic
+     * address without shelling out to the real host.
+     */
+    protected function detectHostIp(): ?string
+    {
+        return (new HostIpDetector)->detect();
+    }
+
+    /**
      * Apply LAN-mode networking values to .env (bind IP, nip.io domain, URLs,
      * profile). Never touches SAIL_SUBNET. Returns the written map.
      *
@@ -231,15 +240,23 @@ trait InteractsWithDockerComposeServices
         $ipWasExplicit = $ip !== null;
         $scheme = $tls ? 'https' : 'http';
 
-        if (! $ip) {
-            $envPath = base_path('.env');
-            if (is_file($envPath) && preg_match('/^SAIL_BIND_IP=(.*)$/m', file_get_contents($envPath), $m)) {
-                $existing = trim($m[1], " \"'");
-                $ip = $existing !== '' ? $existing : null;
-            }
+        $envPath = base_path('.env');
+        $contents = is_file($envPath) ? file_get_contents($envPath) : '';
+        $currentMode = preg_match('/^SAIL_NETWORK_MODE=(.*)$/m', $contents, $mm) ? trim($mm[1], " \"'") : '';
+
+        // Only reuse a stored bind IP / domain when the project is ALREADY in lan
+        // mode — i.e. a genuine re-run or heal. Switching FROM local (or an unset
+        // mode) TO lan must DETECT a fresh LAN IP: in local mode SAIL_BIND_IP holds
+        // the docker-range default (172.20.0.10), and reusing it would silently
+        // bind the host-local address instead of the real LAN IP.
+        $reuseStored = $currentMode === 'lan';
+
+        if (! $ip && $reuseStored && preg_match('/^SAIL_BIND_IP=(.*)$/m', $contents, $m)) {
+            $existing = trim($m[1], " \"'");
+            $ip = $existing !== '' ? $existing : null;
         }
 
-        $ip = $ip ?: (new HostIpDetector)->detect();
+        $ip = $ip ?: $this->detectHostIp();
 
         if (! $ip) {
             throw new \RuntimeException('Could not detect a LAN IP address. Pass one explicitly with --ip=<address>.');
@@ -259,11 +276,11 @@ trait InteractsWithDockerComposeServices
             $values['SAIL_DOMAIN'] = $domain;
             $values['APP_URL'] = $scheme.'://'.$domain;
             $values['VITE_DEV_SERVER_URL'] = $scheme.'://'.$domain.'/vite';
-        } elseif (! $ipWasExplicit) {
-            // Reusing the stored bind IP with no explicit domain: preserve the existing
-            // domain (custom or auto) so a heal/re-run never drifts it.
-            $envPath = base_path('.env');
-            if (is_file($envPath) && preg_match('/^SAIL_DOMAIN=(.*)$/m', file_get_contents($envPath), $dm)) {
+        } elseif (! $ipWasExplicit && $reuseStored) {
+            // Genuine lan re-run with no explicit domain: preserve the existing
+            // domain (custom or auto) so a heal/re-run never drifts it. Only when
+            // already in lan mode — a local->lan switch must build a fresh domain.
+            if (preg_match('/^SAIL_DOMAIN=(.*)$/m', $contents, $dm)) {
                 $stored = trim($dm[1], " \"'");
                 if ($stored !== '') {
                     $values['SAIL_DOMAIN'] = $stored;

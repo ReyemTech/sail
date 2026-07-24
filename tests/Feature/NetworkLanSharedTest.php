@@ -111,8 +111,8 @@ class NetworkLanSharedTest extends TestCase
 
     public function test_lan_reuses_existing_bind_ip_when_no_ip_given(): void
     {
-        // .env already has a bind IP from a prior lan run; no --ip passed this time.
-        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_BIND_IP=192.168.9.9\n");
+        // .env already has a bind IP from a prior lan run (mode=lan); no --ip this time.
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_NETWORK_MODE=lan\nSAIL_BIND_IP=192.168.9.9\n");
 
         $this->artisan('sail:network', ['--mode' => 'lan'])->assertSuccessful();
 
@@ -124,7 +124,7 @@ class NetworkLanSharedTest extends TestCase
 
     public function test_lan_reuses_stored_custom_domain_on_bare_rerun(): void
     {
-        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_BIND_IP=192.168.9.9\nSAIL_DOMAIN=custom.example.com\n");
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_NETWORK_MODE=lan\nSAIL_BIND_IP=192.168.9.9\nSAIL_DOMAIN=custom.example.com\n");
 
         // Bare re-run (as the bin/sail heal does): no --ip, no --domain.
         $this->artisan('sail:network', ['--mode' => 'lan'])->assertSuccessful();
@@ -134,5 +134,52 @@ class NetworkLanSharedTest extends TestCase
         $this->assertStringContainsString('SAIL_DOMAIN="custom.example.com"', $env);
         $this->assertStringContainsString('APP_URL="https://custom.example.com"', $env);
         $this->assertStringNotContainsString('nip.io', $env);
+    }
+
+    public function test_switch_from_local_to_lan_detects_fresh_ip_not_stored_docker_ip(): void
+    {
+        // Fresh LOCAL install: mode=local and SAIL_BIND_IP is the docker-range
+        // default. `--mode=lan` with no --ip must DETECT a fresh LAN IP, never
+        // reuse the host-local 172.20.0.10 (the regression this guards).
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_NETWORK_MODE=local\nSAIL_BIND_IP=172.20.0.10\n");
+
+        // Register a command double whose detectHostIp() is deterministic — it
+        // stands in for HostIpDetector hitting the real host.
+        $this->app[\Illuminate\Contracts\Console\Kernel::class]->registerCommand(new LanIpDetectingNetworkCommand);
+
+        $this->artisan('sail:network', ['--mode' => 'lan'])->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertStringContainsString('SAIL_BIND_IP="192.168.44.44"', $env);
+        $this->assertStringContainsString('alpha.192-168-44-44.nip.io', $env);
+        $this->assertStringContainsString('SAIL_NETWORK_MODE=lan', $env);
+        // The stale docker-range IP must NOT survive the switch.
+        $this->assertStringNotContainsString('172.20.0.10', $env);
+        $this->assertStringNotContainsString('172-20-0-10', $env);
+    }
+
+    public function test_explicit_ip_always_wins_even_when_already_lan(): void
+    {
+        // Already lan with a stored IP, but an explicit --ip must override it.
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_NETWORK_MODE=lan\nSAIL_BIND_IP=192.168.9.9\n");
+
+        $this->artisan('sail:network', ['--mode' => 'lan', '--ip' => '192.168.7.7'])->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertStringContainsString('SAIL_BIND_IP="192.168.7.7"', $env);
+        $this->assertStringContainsString('alpha.192-168-7-7.nip.io', $env);
+        $this->assertStringNotContainsString('192.168.9.9', $env);
+    }
+}
+
+/**
+ * NetworkCommand with a deterministic host-IP detector, for the local->lan
+ * switch test (avoids shelling out to the real host).
+ */
+class LanIpDetectingNetworkCommand extends \Laravel\Sail\Console\NetworkCommand
+{
+    protected function detectHostIp(): ?string
+    {
+        return '192.168.44.44';
     }
 }
