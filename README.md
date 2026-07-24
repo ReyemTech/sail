@@ -158,8 +158,26 @@ sail artisan sail:network --mode=lan --resolver=nip    # <project>.<ip>.nip.io (
 
 mDNS mode:
 
-- Requires an **`avahi-daemon` running on the host** (e.g. `apt install avahi-daemon`
-  on Debian/Ubuntu; macOS Bonjour already provides mDNS).
+- **Host prerequisite (required):** `avahi-daemon` must be **installed and
+  running** on the Linux host. The `avahi-publish` sidecar is only a *client* —
+  it registers the record with the host daemon over the D-Bus system bus; it
+  does not itself answer mDNS. Without a running daemon the sidecar just
+  restart-loops and `<project>.local` never resolves.
+
+  ```bash
+  sudo apt install -y avahi-daemon        # Debian/Ubuntu
+  sudo systemctl enable --now avahi-daemon
+  ```
+
+  macOS already provides mDNS via Bonjour — no daemon to install.
+- **Verify resolution** from any machine on the LAN once `sail up` is running:
+
+  ```bash
+  avahi-resolve -n <project>.local        # should print <project>.local <SAIL_BIND_IP>
+  ```
+
+  If it fails, check the sidecar logs: `docker logs <project>-avahi-publish-1`
+  (apk/avahi errors are surfaced there, not silenced).
 - Adds an `avahi-publish` sidecar (host-networked) to the project's compose
   override that advertises `<project>.local` → your `SAIL_BIND_IP` to other
   devices via the host daemon.

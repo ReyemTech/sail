@@ -48,10 +48,14 @@ class SharedProxyStackTest extends TestCase
 
         $svc = $parsed['services']['avahi-publish'];
         $this->assertSame('host', $svc['network_mode']);
-        $this->assertContains('/var/run/dbus:/var/run/dbus', $svc['volumes']);
+        // The load-bearing mount: the D-Bus system bus the host avahi-daemon
+        // listens on (canonical /run path; /var/run is a symlink to it).
+        $this->assertContains('/run/dbus:/run/dbus', $svc['volumes']);
         $this->assertContains('/var/run/avahi-daemon:/var/run/avahi-daemon', $svc['volumes']);
         // The advertised name + address come from .env at compose time.
         $this->assertStringContainsString('avahi-publish -a ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $yaml);
+        // apk / avahi failures must surface in `docker logs`, never be silenced.
+        $this->assertStringNotContainsString('>/dev/null', $yaml);
         // The mdns sidecar is host-networked, so it must NOT join the shared network.
         $this->assertArrayNotHasKey('networks', $svc);
     }

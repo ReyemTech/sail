@@ -45,9 +45,19 @@ class SharedProxyStack
 
     /**
      * A host-networked sidecar that advertises SAIL_DOMAIN -> SAIL_BIND_IP over
-     * mDNS via the HOST's avahi-daemon (requires avahi-daemon running on the
-     * host; the socket + dbus are mounted in). Only emitted when resolver=mdns.
-     * SAIL_DOMAIN / SAIL_BIND_IP are interpolated from .env at compose time.
+     * mDNS via the HOST's avahi-daemon. Only emitted when resolver=mdns.
+     *
+     * HOST PREREQUISITE: avahi-daemon must be installed AND running on the host
+     * (`sudo apt install -y avahi-daemon`). avahi-publish is a *client* — it does
+     * not itself answer mDNS; it registers the record with the host daemon over
+     * the D-Bus system bus (the load-bearing mount below is /run/dbus). Without a
+     * running host daemon the container exits and restart-loops (visible in
+     * `docker logs`), and <project>.local will not resolve.
+     *
+     * `network_mode: host` is required so the registration reaches the daemon and
+     * is announced on the real LAN interface. SAIL_DOMAIN / SAIL_BIND_IP are
+     * interpolated from .env at compose time. apk/avahi errors are NOT silenced so
+     * failures surface in `docker logs <project>-avahi-publish-1`.
      */
     private function avahiSidecar(): string
     {
@@ -57,9 +67,9 @@ class SharedProxyStack
                 image: alpine:3
                 restart: unless-stopped
                 network_mode: host
-                command: sh -c "apk add --no-cache avahi-tools >/dev/null 2>&1 && exec avahi-publish -a \${SAIL_DOMAIN} \${SAIL_BIND_IP}"
+                command: sh -c "apk add --no-cache avahi-tools && exec avahi-publish -a \${SAIL_DOMAIN} \${SAIL_BIND_IP}"
                 volumes:
-                    - /var/run/dbus:/var/run/dbus
+                    - /run/dbus:/run/dbus
                     - /var/run/avahi-daemon:/var/run/avahi-daemon
         YAML;
     }
