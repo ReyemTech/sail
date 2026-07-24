@@ -1,5 +1,13 @@
 # Release Notes
 
+## [3.5.1](https://github.com/ReyemTech/sail/compare/v3.5.0...v3.5.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* **network:** raise shared-proxy header buffers to prevent 502 on large headers ([89ee560](https://github.com/ReyemTech/sail/commit/89ee56059695733eaae16ab8a7409b21db519b1f))
+* **network:** raise shared-proxy header buffers to prevent 502 on large headers ([d10dc1d](https://github.com/ReyemTech/sail/commit/d10dc1df9eb39d7a5eda8fa0a169533e755c8dc7))
+
 ## [3.5.0](https://github.com/ReyemTech/sail/compare/v3.4.3...v3.5.0) (2026-07-24)
 
 
