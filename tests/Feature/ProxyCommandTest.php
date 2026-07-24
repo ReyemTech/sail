@@ -50,6 +50,12 @@ class ProxyCommandTest extends TestCase
         $cmds = File::get($log);
         $this->assertStringContainsString('network create sail-shared', $cmds);
         $this->assertStringContainsString('compose -f '.$stack.' up -d', $cmds);
+
+        // The buffers conf must be written alongside the compose so the relative
+        // ./proxy-buffers.conf mount resolves (else nginx-proxy 502s on big headers).
+        $conf = $this->home.'/proxy/proxy-buffers.conf';
+        $this->assertFileExists($conf);
+        $this->assertStringContainsString('proxy_buffer_size', File::get($conf));
     }
 
     public function test_up_honors_sail_docker_binary_for_podman(): void

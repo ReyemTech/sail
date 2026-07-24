@@ -22,6 +22,18 @@ class SharedProxyStack
         ]);
     }
 
+    /**
+     * The nginx snippet mounted into the shared proxy's conf.d that raises the
+     * proxy header buffers. Written next to the compose file by ProxyCommand so the
+     * relative `./proxy-buffers.conf` mount resolves. Without it, large upstream
+     * response headers (long CSP, many Set-Cookie) overflow nginx's 4k/8k default
+     * and the proxy returns 502 even though the app responded fine.
+     */
+    public function proxyBuffersConf(): string
+    {
+        return (string) file_get_contents(__DIR__.'/../../stubs/shared-proxy-buffers.conf');
+    }
+
     public function projectOverride(?string $network = null, bool $mdns = false): string
     {
         $network = $network ?: $this->network;
