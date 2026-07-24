@@ -1,5 +1,63 @@
 # Release Notes
 
+## [3.5.0](https://github.com/ReyemTech/sail/compare/v3.4.3...v3.5.0) (2026-07-24)
+
+
+### Features
+
+* **network:** --resolver option wires mdns/nip through lan config ([b2b0a06](https://github.com/ReyemTech/sail/commit/b2b0a0629e180ab584a32621550cc42213db963d))
+* **network:** add HostIpDetector for LAN IP detection ([3d2ada9](https://github.com/ReyemTech/sail/commit/3d2ada9fac54ab437f40877876415ba8b667dce0))
+* **network:** add LanEnvironment nip.io value computation ([93ef9e1](https://github.com/ReyemTech/sail/commit/93ef9e16a46b9bc654e59d004a68735b3a4edc98))
+* **network:** add network config section with local-mode defaults ([0211c4a](https://github.com/ReyemTech/sail/commit/0211c4ab4540629e2e02c79dbacaffc5015c12a7))
+* **network:** add per-machine HostRegistry for port-slot allocation ([eb5982f](https://github.com/ReyemTech/sail/commit/eb5982f2ba5a0243de56454a534cc63c39698c14))
+* **network:** add sail:network command for status and local env seed ([b5f8da9](https://github.com/ReyemTech/sail/commit/b5f8da94bba47a38deb115c95cc1104b1d13bb3c))
+* **network:** add sail:proxy command to manage the shared LAN proxy ([071a8a9](https://github.com/ReyemTech/sail/commit/071a8a9dd1f4369e2a2da316b686245fb9630bb9))
+* **network:** add SailHome host-state path resolver ([2bc451e](https://github.com/ReyemTech/sail/commit/2bc451e6a3cbdc1953116e5e2659ec102ee4f2f3))
+* **network:** configurable network modes — local, LAN (single/multi-project, nip.io/mDNS), lan-direct, plain-HTTP ([3fee103](https://github.com/ReyemTech/sail/commit/3fee10332311207cd27a97544ae37252c09f753f))
+* **network:** detect + warn (and offer to fix) missing host avahi for mdns ([bd8347c](https://github.com/ReyemTech/sail/commit/bd8347c76635f659f3b1c55be97387234a56f56d))
+* **network:** emit avahi-publish sidecar for mdns overrides ([e5a83df](https://github.com/ReyemTech/sail/commit/e5a83df5b397314414263209cf8ba434df7ced3b))
+* **network:** lan mode writes shared-proxy override, SAIL_FILES, port offsets ([1ea6def](https://github.com/ReyemTech/sail/commit/1ea6def67d72bb09a2b3c7a2167e8eb4c9ab6930))
+* **network:** lan-direct mode + plain-HTTP TLS toggle (PHP) ([a415c57](https://github.com/ReyemTech/sail/commit/a415c578761e03c1e1b08ec3c8da23afbbdd7863))
+* **network:** lan-direct NIC aliasing + plain-HTTP cert-skip (sail-setup) ([601ce7c](https://github.com/ReyemTech/sail/commit/601ce7c5304cc06fb331961a1b2a9156fa3a4517))
+* **network:** LanEnvironment supports mdns (.local) resolver ([6b62787](https://github.com/ReyemTech/sail/commit/6b6278775f0690b67c517b168835fb8a51fe7a15))
+* **network:** make sail-setup mode-aware (skip host-local steps in lan) ([96d4447](https://github.com/ReyemTech/sail/commit/96d4447de517ddb6a1b06b0e258a8a617ad8a5b9))
+* **network:** publish ports via SAIL_BIND_IP (SAIL_IP kept as alias) ([4fbfd67](https://github.com/ReyemTech/sail/commit/4fbfd67c57c22c91df9dcdb9005c77eb78f9a5db))
+* **network:** re-run setup when the lan-direct LAN alias is missing (bin/sail) ([7961335](https://github.com/ReyemTech/sail/commit/79613354808d17116f79e65a79ab44e99f3552c2))
+* **network:** render shared-proxy compose + per-project lan override ([07f6f89](https://github.com/ReyemTech/sail/commit/07f6f899ef7151b1bc0ac6966bdbef24ac133c36))
+* **network:** sail up auto-heals networking; mode-aware setup checks ([71ac7cc](https://github.com/ReyemTech/sail/commit/71ac7cc7e0ab93951843060647790e461db23e98))
+* **network:** sail up bootstraps shared network + proxy in lan mode ([58e5697](https://github.com/ReyemTech/sail/commit/58e569744c7de288df77efec23ccb8f2fc7569ee))
+* **network:** sail:network --status shows lan domain + assigned ports ([1aaafb3](https://github.com/ReyemTech/sail/commit/1aaafb36bf4a362d62a7bb6612bf2bf37d03e584))
+* **network:** sail:network/sail:install --mode=lan (nip.io + LAN bind) ([7a64128](https://github.com/ReyemTech/sail/commit/7a64128fd641d17d5d44e541cb8b8248fadc237b))
+* **network:** write lan-mode certs to the shared SAIL_HOME certs dir ([f5c3e16](https://github.com/ReyemTech/sail/commit/f5c3e16c204e1c4f2d3016952ea722480149ef06))
+
+
+### Bug Fixes
+
+* **add:** pass resolved project name to sail:add compose/env generation ([3ed65aa](https://github.com/ReyemTech/sail/commit/3ed65aad2c748f8a6d333b04ef91534d8afd9dff))
+* **build:** correct realpath and empty-ORG/VERSION fallback in bin/sail ([2df5c04](https://github.com/ReyemTech/sail/commit/2df5c040b8a736caad9096e1720a73ccaceb8747))
+* **build:** reconcile compose image tag with the baked tag + app-service fallback ([506c86a](https://github.com/ReyemTech/sail/commit/506c86ab51d0cd8fa39ced4fc21dd1de868fb947))
+* **build:** show the single invalid environment, not implode() a string ([9f5f0c5](https://github.com/ReyemTech/sail/commit/9f5f0c5a255da0d0c2a2286872861706aa6ef0e4))
+* **network:** applyLanConfig reuses stored SAIL_BIND_IP (idempotent re-config) ([6485ef5](https://github.com/ReyemTech/sail/commit/6485ef52d9b67290e2071dafc1abfa0d4d6c523a))
+* **network:** atomic HostRegistry::save() (temp file + rename) ([eea42d7](https://github.com/ReyemTech/sail/commit/eea42d79ebb14c2aab70a2031c171bff52f0f449))
+* **network:** bin/sail up honors SAIL_FILES override; start proxy after certs ([54fed04](https://github.com/ReyemTech/sail/commit/54fed040ff310cb23e15159c1955161d8adba57c))
+* **network:** derive SAIL_FILES base name from composePath (not hardcoded) ([fefb316](https://github.com/ReyemTech/sail/commit/fefb316cf4a05dc7561fef7eaa570e3e2e7a8940))
+* **network:** detect a fresh LAN IP on a local-&gt;lan switch ([58abf51](https://github.com/ReyemTech/sail/commit/58abf51c4e5dcb597607d732626429bea7ac72ce))
+* **network:** don't write generic certs into the shared lan certs dir ([1d304ce](https://github.com/ReyemTech/sail/commit/1d304ce1562c08f5728e44dc0788d9d72615e135))
+* **network:** drop non-portable -R from avahi-publish sidecar ([dc21fbd](https://github.com/ReyemTech/sail/commit/dc21fbdfc42118d1c808cbe6393093d980376f3e))
+* **network:** export COMPOSE_PROFILES/SAIL_FILES so Compose honors them ([4fef268](https://github.com/ReyemTech/sail/commit/4fef268e26afaf98cf85d94d17ab25f2a6b5de82))
+* **network:** honor an explicit --resolver switch; preserve stored resolver on heal ([4098806](https://github.com/ReyemTech/sail/commit/40988066c8be35801bf1522306f52f310b9e5ab8))
+* **network:** honor SAIL_DOCKER_BINARY for shared-network docker calls ([a13951d](https://github.com/ReyemTech/sail/commit/a13951df23337387733e1adc6d0d570cfc1dd582))
+* **network:** lan NEEDS_SETUP checks the shared certs dir (stop re-firing) ([5f96581](https://github.com/ReyemTech/sail/commit/5f96581a3f45bdd80c05fa74637bffbad7b57a1b))
+* **network:** lock HostRegistry slot allocation; guard atomic save ([cc752a2](https://github.com/ReyemTech/sail/commit/cc752a2ac04a82c2184855d564d9f2d3307ff720))
+* **network:** make mDNS .local actually resolve — CNAME sidecar + host-config batteries ([12fe2b7](https://github.com/ReyemTech/sail/commit/12fe2b7a2ea66d6555851020dd6f76fbde72d9d5))
+* **network:** make the mDNS avahi sidecar correct + document host prereq ([56d8f7a](https://github.com/ReyemTech/sail/commit/56d8f7af0e00adab51a4e75048b7000abfb8519b))
+* **network:** mDNS publisher must survive avahi-daemon restarts ([b156945](https://github.com/ReyemTech/sail/commit/b15694598fd0a72013ce1cf36f3e0b0da351eda3))
+* **network:** regenerate a missing lan SAIL_FILES override before bailing ([f253b69](https://github.com/ReyemTech/sail/commit/f253b694e8d8e640c4d1f38976dd80bb99b6b067))
+* **network:** regenerate cert on domain change + apply lan config before setup ([a4b4db7](https://github.com/ReyemTech/sail/commit/a4b4db7f7359d0b5580beaa46785ff3645061df5))
+* **network:** reuse stored custom domain on lan re-run; check rename in save ([c7c2879](https://github.com/ReyemTech/sail/commit/c7c2879e8900d26b279a9da3135aedc7ab5f9034))
+* **network:** sail:proxy status checks real network state ([6dc5888](https://github.com/ReyemTech/sail/commit/6dc588884363d84343535edb8106338b27aca4e6))
+* **network:** seed SAIL_BIND_IP from existing SAIL_IP alias on upgrade path ([dc9a3e1](https://github.com/ReyemTech/sail/commit/dc9a3e12a3350785dba752ed355b5b3690038460))
+
 ## [3.4.3](https://github.com/ReyemTech/sail/compare/v3.4.2...v3.4.3) (2026-07-16)
 
 
