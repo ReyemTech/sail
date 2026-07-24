@@ -55,6 +55,41 @@ class BindIpStubTest extends TestCase
         (new \Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
     }
 
+    public function test_write_project_env_writes_build_vars_matching_compose_image(): void
+    {
+        $base = sys_get_temp_dir().'/sail-buildvars-'.uniqid();
+        mkdir($base, 0755, true);
+        file_put_contents($base.'/.env', "APP_NAME=TestApp\n");
+        $this->app->setBasePath($base);
+
+        $command = new class extends \Illuminate\Console\Command {
+            use \Laravel\Sail\Console\Concerns\InteractsWithDockerComposeServices;
+            public function option($key = null) { return '8.5'; }
+            public function call($command, array $arguments = []) { return 0; }
+        };
+        $command->setLaravel($this->app);
+
+        $method = new \ReflectionMethod($command, 'writePorjectEnv');
+        $method->setAccessible(true);
+        $method->invoke($command, 'demo', '172.20.0.10', 'demo.test');
+
+        $env = file_get_contents($base.'/.env');
+        $org = (string) config('sail.build.organization', 'reyemtech');
+        $version = (string) config('sail.build.version', '1.0.0');
+
+        // Both vars must be present so compose's ${SAIL_BUILD_ORGANIZATION}/laravel:${SAIL_BUILD_VERSION}
+        // renders a valid reference (never a blank "/laravel:") — and matches bin/sail's bake tag.
+        $this->assertMatchesRegularExpression('/^SAIL_BUILD_ORGANIZATION="?'.preg_quote($org, '/').'"?$/m', $env);
+        $this->assertMatchesRegularExpression('/^SAIL_BUILD_VERSION="?'.preg_quote($version, '/').'"?$/m', $env);
+
+        // The compose stub's literal image line, interpolated with these vars, must
+        // yield the exact tag bin/sail bakes: $org/laravel:$version.
+        $stub = file_get_contents(__DIR__.'/../../stubs/compose.stub');
+        $this->assertStringContainsString('${SAIL_BUILD_ORGANIZATION}/laravel:${SAIL_BUILD_VERSION}', $stub);
+
+        (new \Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
+    }
+
     private function makeEnsureBindIpCommand()
     {
         $command = new class extends \Illuminate\Console\Command {

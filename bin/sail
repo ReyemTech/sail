@@ -252,7 +252,9 @@ function detect_app_service {
         fi
     fi
 
-    echo "laravel.test"
+    # This fork's app service is `laravel` (see stubs/compose.stub), not stock
+    # Sail's `laravel.test`. Fall back to it when `compose config` yields nothing.
+    echo "laravel"
 }
 
 # Define environment variables (after compose files are processed)...
@@ -325,11 +327,13 @@ elif [ "$1" == "up" ]; then
     # Note: a `grep | cut` pipeline exits 0 (from cut) even when grep finds
     # nothing, so `|| echo default` never fires — default with `${VAR:-...}`.
     ORG=$(grep -m 1 '^SAIL_BUILD_ORGANIZATION=' .env | cut -d '=' -f2 | tr -d '"')
-    ORG=${ORG:-default}
-    APP_NAME=$(grep -m 1 '^APP_NAME=' .env | cut -d '=' -f2 | tr -d '"' | awk '{print tolower($0)}')
-    APP_NAME=${APP_NAME:-laravel}
+    ORG=${ORG:-reyemtech}
+    # compose.stub pins the image repo to the literal `laravel`
+    # (${SAIL_BUILD_ORGANIZATION}/laravel:${SAIL_BUILD_VERSION}); bake the SAME
+    # repo so the built tag equals the image compose runs — do NOT use APP_NAME.
+    APP_NAME=laravel
     VERSION=$(grep -m 1 '^SAIL_BUILD_VERSION=' .env | cut -d '=' -f2 | tr -d '"')
-    VERSION=${VERSION:-latest}
+    VERSION=${VERSION:-1.0.0}
     APP_DIR=$(realpath .)
     RUNTIME_DIR=$(realpath vendor/reyemtech/sail/runtimes/8.x)
 

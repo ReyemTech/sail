@@ -174,6 +174,11 @@ trait InteractsWithDockerComposeServices
         $writer->set('SAIL_BIND_IP', $ip);
         $writer->set('SAIL_SUBNET', $subnet);
         $writer->set('SAIL_PROJECT', $project);
+        // The compose image reference is ${SAIL_BUILD_ORGANIZATION}/laravel:${SAIL_BUILD_VERSION};
+        // persist both so the rendered image tag is a valid reference AND matches the
+        // tag bin/sail's `docker buildx bake` produces for this project.
+        $writer->set('SAIL_BUILD_ORGANIZATION', (string) config('sail.build.organization', 'reyemtech'));
+        $writer->set('SAIL_BUILD_VERSION', (string) config('sail.build.version', '1.0.0'));
         // $domain = parse_url(config('app.url'), PHP_URL_HOST);
         $writer->set('SAIL_DOMAIN', $domain);
         $writer->set('APP_URL', 'https://' . $domain);
