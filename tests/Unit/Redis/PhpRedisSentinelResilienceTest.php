@@ -62,6 +62,38 @@ class PhpRedisSentinelResilienceTest extends TestCase
         $this->assertTrue($connector->canResolve('tcp://[2001:db8::1]:6379'));
     }
 
+    public function test_ip_literals_bypass_the_resolver_and_non_ips_delegate_to_it(): void
+    {
+        // A hostname with only AAAA records must still count as resolvable — the
+        // resolver seam covers A + AAAA, so gethostbynamel's IPv4-only blindness
+        // can't discard a valid IPv6-only master. Here the seam is scripted so the
+        // test never touches real DNS.
+        $unresolvable = new class extends PhpRedisSentinelConnector {
+            public bool $seamCalled = false;
+
+            public function probe(string $host): bool
+            {
+                return $this->canResolveSentinelMasterHost($host);
+            }
+
+            protected function hostResolvesToAddress(string $hostname): bool
+            {
+                $this->seamCalled = true;
+
+                return false;
+            }
+        };
+
+        // IPv4 + IPv6 literals resolve via filter_var — the resolver is never consulted.
+        $this->assertTrue($unresolvable->probe('10.0.0.42'));
+        $this->assertTrue($unresolvable->probe('[2001:db8::1]'));
+        $this->assertFalse($unresolvable->seamCalled, 'IP literals must not hit the resolver');
+
+        // A non-IP host is delegated to the (A + AAAA) resolver seam.
+        $this->assertFalse($unresolvable->probe('aaaa-only-master.cluster.local'));
+        $this->assertTrue($unresolvable->seamCalled);
+    }
+
     public function test_identifies_transient_dns_failures_as_retryable(): void
     {
         $connector = new SentinelResilienceProbe;

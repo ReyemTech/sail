@@ -191,7 +191,27 @@ class PhpRedisSentinelConnector extends PhpRedisConnector
             return true;
         }
 
-        return gethostbynamel($hostname) !== false;
+        return $this->hostResolvesToAddress($hostname);
+    }
+
+    /**
+     * Whether a hostname resolves to any usable address. Checks IPv4 (A records)
+     * via the system resolver first — gethostbynamel() honours /etc/hosts and the
+     * resolv.conf search domains, which matters for cluster-internal names — then
+     * falls back to an AAAA lookup. The AAAA check is essential: gethostbynamel()
+     * is IPv4-only, so on an IPv6-only cluster an AAAA-only master would otherwise
+     * be wrongly discarded and the connector would keep using a stale fallback.
+     * Overridable so tests can verify the resolvability wiring without real DNS.
+     */
+    protected function hostResolvesToAddress(string $hostname): bool
+    {
+        if (gethostbynamel($hostname) !== false) {
+            return true;
+        }
+
+        $aaaa = @dns_get_record($hostname, DNS_AAAA);
+
+        return is_array($aaaa) && $aaaa !== [];
     }
 
     /**
