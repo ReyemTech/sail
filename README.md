@@ -253,13 +253,17 @@ sail up      # sail-setup aliases the IP onto your LAN NIC (needs sudo)
   addresses on your LAN subnet — ideally outside your router's DHCP pool so they
   aren't handed to other devices.
 - The IP is aliased onto your host's **default-route (LAN) interface**, so the
-  project is reachable from any device at `http(s)://<project>.<ip>.nip.io` (or
-  `<project>.local` with `--resolver=mdns`) on standard ports.
+  project is reachable from any device at `http(s)://<project>.<ip>.nip.io` on
+  standard ports.
+- **Use the nip.io resolver here.** The mDNS sidecar that advertises
+  `<project>.local` belongs to shared `lan` mode; `lan-direct` runs its own
+  per-project proxy and publishes **no** mDNS record — so `--resolver=mdns` would
+  set a `.local` domain that nothing answers for.
 - **Linux/macOS only, and NOT Docker-Desktop-compatible:** aliasing an IP onto
   the host NIC needs root and a real host network interface. Docker Desktop's
   VM-based networking can't publish to a NIC-aliased host IP. Use `lan` (shared
   proxy) on Docker Desktop.
-- No `/etc/hosts` edits are needed — nip.io/.local resolve on their own.
+- No `/etc/hosts` edits are needed — nip.io resolves on its own.
 - Certificates use the per-project `vendor/reyemtech/sail/certs` dir (same as
   local); import its `mkcert-rootCA.pem` on client devices.
 
