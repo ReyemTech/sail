@@ -87,6 +87,37 @@ class NetworkLanSharedTest extends TestCase
         $this->assertStringContainsString('avahi-publish -a ${SAIL_DOMAIN} ${SAIL_BIND_IP}', $override);
     }
 
+    public function test_switching_resolver_to_mdns_rebuilds_the_domain(): void
+    {
+        // Already in lan mode with a stored nip.io domain (a prior run). Opting
+        // into mdns must REBUILD the domain to <project>.local, not preserve the
+        // stale nip.io domain (the heal/re-run preserve logic must not win here).
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_NETWORK_MODE=lan\nSAIL_RESOLVER=nip\nSAIL_BIND_IP=192.168.1.50\nSAIL_DOMAIN=alpha.192-168-1-50.nip.io\n");
+
+        $this->artisan('sail:network', ['--mode' => 'lan', '--resolver' => 'mdns'])
+            ->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertStringContainsString('SAIL_RESOLVER=mdns', $env);
+        $this->assertStringContainsString('SAIL_DOMAIN="alpha.local"', $env);
+        $this->assertStringContainsString('APP_URL="https://alpha.local"', $env);
+        $this->assertStringNotContainsString('nip.io', $env);
+    }
+
+    public function test_heal_without_explicit_resolver_preserves_stored_mdns(): void
+    {
+        // The bin/sail heal path runs `sail:network --mode=lan` with NO --resolver.
+        // A heal must never silently flip a stored mdns project back to nip.io.
+        File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\nSAIL_NETWORK_MODE=lan\nSAIL_RESOLVER=mdns\nSAIL_BIND_IP=192.168.1.50\nSAIL_DOMAIN=alpha.local\n");
+
+        $this->artisan('sail:network', ['--mode' => 'lan'])->assertSuccessful();
+
+        $env = File::get($this->base.'/.env');
+        $this->assertStringContainsString('SAIL_RESOLVER=mdns', $env);
+        $this->assertStringContainsString('SAIL_DOMAIN="alpha.local"', $env);
+        $this->assertStringNotContainsString('nip.io', $env);
+    }
+
     public function test_lan_default_resolver_is_nip_without_avahi_sidecar(): void
     {
         File::put($this->base.'/.env', "APP_NAME=TestApp\nSAIL_PROJECT=alpha\n");

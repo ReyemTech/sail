@@ -244,6 +244,7 @@ trait InteractsWithDockerComposeServices
     protected function applyLanConfig(?string $ip = null, ?string $domain = null, ?string $resolver = null, bool $tls = true): array
     {
         $ipWasExplicit = $ip !== null;
+        $resolverWasExplicit = $resolver !== null;
         $scheme = $tls ? 'https' : 'http';
 
         $envPath = base_path('.env');
@@ -268,6 +269,16 @@ trait InteractsWithDockerComposeServices
             throw new \RuntimeException('Could not detect a LAN IP address. Pass one explicitly with --ip=<address>.');
         }
 
+        // On a heal/re-run with NO explicit --resolver, reuse the stored resolver
+        // so `sail up`'s heal (`sail:network --mode=lan`) never silently flips a
+        // stored mdns project back to nip. An explicit --resolver always wins.
+        if (! $resolverWasExplicit && $reuseStored && preg_match('/^SAIL_RESOLVER=(.*)$/m', $contents, $rm)) {
+            $storedResolver = trim($rm[1], " \"'");
+            if (in_array($storedResolver, ['nip', 'mdns'], true)) {
+                $resolver = $storedResolver;
+            }
+        }
+
         // LAN default is nip.io; mDNS (.local) is opt-in via --resolver=mdns.
         // The config default ('mdns') is deliberately NOT used as the effective
         // LAN default — nip.io stays the safe cross-device default (mDNS is
@@ -282,10 +293,12 @@ trait InteractsWithDockerComposeServices
             $values['SAIL_DOMAIN'] = $domain;
             $values['APP_URL'] = $scheme.'://'.$domain;
             $values['VITE_DEV_SERVER_URL'] = $scheme.'://'.$domain.'/vite';
-        } elseif (! $ipWasExplicit && $reuseStored) {
-            // Genuine lan re-run with no explicit domain: preserve the existing
-            // domain (custom or auto) so a heal/re-run never drifts it. Only when
-            // already in lan mode — a local->lan switch must build a fresh domain.
+        } elseif (! $ipWasExplicit && ! $resolverWasExplicit && $reuseStored) {
+            // Genuine lan re-run with no explicit domain/resolver: preserve the
+            // existing domain (custom or auto) so a heal/re-run never drifts it.
+            // Only when already in lan mode — a local->lan switch must build a
+            // fresh domain, and an explicit --resolver must rebuild it to match
+            // (nip.io <-> .local), never keep the previous resolver's stale name.
             if (preg_match('/^SAIL_DOMAIN=(.*)$/m', $contents, $dm)) {
                 $stored = trim($dm[1], " \"'");
                 if ($stored !== '') {
@@ -356,6 +369,16 @@ trait InteractsWithDockerComposeServices
             }
 
             throw new \RuntimeException($message);
+        }
+
+        // Reuse the stored resolver on a no-explicit-resolver re-run so a stored
+        // mdns lan-direct project isn't silently reset to nip (mirrors applyLanConfig).
+        if ($resolver === null && preg_match('/^SAIL_NETWORK_MODE=lan-direct$/m', $contents)
+            && preg_match('/^SAIL_RESOLVER=(.*)$/m', $contents, $rm)) {
+            $storedResolver = trim($rm[1], " \"'");
+            if (in_array($storedResolver, ['nip', 'mdns'], true)) {
+                $resolver = $storedResolver;
+            }
         }
 
         $resolver = in_array($resolver, ['nip', 'mdns'], true) ? $resolver : 'nip';
