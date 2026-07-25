@@ -56,7 +56,9 @@ vendor/bin/phpstan analyse src   # PHPStan level 0
 
 **Templates** (`stubs/`): `.stub` files for docker-compose services, Helm charts (deployments, HPA, PDB, ingress, external secrets, ArgoCD presync), and CI/CD pipelines.
 
-**Docker Runtimes** (`runtimes/`): Multi-stage builds using `docker-bake.hcl` with targets: base, app, production (cli/fpm). PHP 8.x and 8.5 supported.
+**Docker Runtimes** (`runtimes/8.x/`): Multi-stage builds using a single `docker-bake.hcl` with targets: base, app, production (cli/fpm). PHP version is the `PHP_VERSION` bake variable, so one runtime covers every supported 8.x release — there is deliberately no per-version runtime directory.
+
+Frontend build-time config (`VITE_SENTRY_DSN`, `VITE_SENTRY_RELEASE`, `SENTRY_ORG`, `SENTRY_PROJECT`) is forwarded from `config('sail.build.args')` into the bake command; `SENTRY_AUTH_TOKEN` comes from `config('sail.build.secrets')` and is passed through the build process environment as a BuildKit `type=env` secret, never through the command line Sail prints.
 
 ## Code Style
 

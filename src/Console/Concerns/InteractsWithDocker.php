@@ -166,6 +166,15 @@ trait InteractsWithDocker
             $args['REGISTRY'] = $repository;
         }
 
+        // Frontend build-time configuration is merged underneath Sail's own keys, so
+        // a project that happens to configure a colliding name cannot clobber
+        // VERSION, ARCHS or any other value Sail derives itself.
+        $args = array_merge($this->frontendBuildArgs($args['VERSION']), $args);
+
+        $secrets = $this->frontendBuildSecrets();
+
+        $this->warnAboutIncompleteSentryConfig($args, $secrets);
+
         $commands = [];
         $path = realpath(InstalledVersions::getInstallPath('reyemtech/sail'));
         if (! is_dir("{$path}/certs")) {
@@ -173,7 +182,103 @@ trait InteractsWithDocker
         }
         $commands[] = $this->createBakeCommand($args);
 
-        return $this->runCommands($commands);
+        return $this->runCommands($commands, $secrets);
+    }
+
+    /**
+     * The frontend build-time arguments forwarded to the asset build.
+     *
+     * @param  string|null  $version  The version being built, used as the default Sentry release.
+     * @return array<string, string>
+     */
+    protected function frontendBuildArgs($version = null): array
+    {
+        $args = $this->nonEmptyConfigValues('sail.build.args');
+
+        // A release name is only meaningful once a DSN is configured. Defaulting it
+        // to the version being built keeps the Sentry release in step with the image
+        // tag, and picks up --build-version and --bump, which a config-time env()
+        // read could not see.
+        if (isset($args['VITE_SENTRY_DSN']) && ! isset($args['VITE_SENTRY_RELEASE']) && ! empty($version)) {
+            $args['VITE_SENTRY_RELEASE'] = (string) $version;
+        }
+
+        return $args;
+    }
+
+    /**
+     * The build-time secrets handed to the build process through its environment.
+     *
+     * @return array<string, string>
+     */
+    protected function frontendBuildSecrets(): array
+    {
+        return $this->nonEmptyConfigValues('sail.build.secrets');
+    }
+
+    /**
+     * Read a config map, discarding anything that is not a non-empty scalar.
+     *
+     * Values reach the build as environment variables, so anything that cannot be
+     * expressed as a string is dropped rather than coerced into something odd.
+     *
+     * @return array<string, string>
+     */
+    protected function nonEmptyConfigValues(string $key): array
+    {
+        $values = config($key, []);
+
+        if (! is_array($values)) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($values as $name => $value) {
+            if (! is_string($name) || ! is_scalar($value)) {
+                continue;
+            }
+
+            $value = is_bool($value) ? ($value ? 'true' : 'false') : (string) $value;
+
+            if ($value !== '') {
+                $result[$name] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Warn when a Sentry auth token is present without the org and project it needs.
+     *
+     * The Sentry bundler plugin activates on the token alone and then fails the
+     * upload with an opaque error if it cannot resolve an org or project. This is
+     * only a warning: the project's own bundler config may supply both.
+     *
+     * @param  array<string, mixed>  $args
+     * @param  array<string, string>  $secrets
+     */
+    protected function warnAboutIncompleteSentryConfig(array $args, array $secrets): void
+    {
+        if (! isset($secrets['SENTRY_AUTH_TOKEN'])) {
+            return;
+        }
+
+        $missing = array_values(array_filter(
+            ['SENTRY_ORG', 'SENTRY_PROJECT'],
+            fn ($key) => ! isset($args[$key])
+        ));
+
+        if ($missing === []) {
+            return;
+        }
+
+        $this->components->warn(
+            '⚠️  SENTRY_AUTH_TOKEN is set but '.implode(' and ', $missing).
+            ' '.(count($missing) === 1 ? 'is' : 'are').' not. Sourcemap upload will fail '.
+            'unless your bundler config supplies '.(count($missing) === 1 ? 'it' : 'them').'.'
+        );
     }
 
     protected function createBakeCommand(array $args)
@@ -181,13 +286,15 @@ trait InteractsWithDocker
         $bakeCommand = '';
         foreach ($args as $key => $value) {
             if (is_array($value)) {
-                $bakeCommand .= ' '.$key.'='.implode(',', $value);
+                $value = implode(',', $value);
             } elseif (is_bool($value)) {
                 // HCL requires "true" or "false" as strings for boolean variables
-                $bakeCommand .= ' '.$key.'='.($value ? 'true' : 'false');
-            } else {
-                $bakeCommand .= ' '.$key.'='.$value;
+                $value = $value ? 'true' : 'false';
             }
+
+            // Values are configurable (a Sentry DSN, a release name derived from git),
+            // so they are quoted rather than trusted to be shell-safe.
+            $bakeCommand .= ' '.$key.'='.escapeshellarg((string) $value);
         }
 
         $bakeCommand .= ' docker buildx bake ';
@@ -441,12 +548,17 @@ trait InteractsWithDocker
     /**
      * Run the given commands.
      *
+     * Values in $env are merged over the inherited environment by Symfony, never
+     * replacing it. This is how build secrets reach the build without appearing in
+     * the command string that is echoed to the terminal and to CI logs.
+     *
      * @param  array  $commands
+     * @param  array<string, string>  $env
      * @return int
      */
-    protected function runCommands($commands)
+    protected function runCommands($commands, array $env = [])
     {
-        $process = Process::fromShellCommandline(implode(' && ', $commands), null, null, null, null);
+        $process = Process::fromShellCommandline(implode(' && ', $commands), null, $env ?: null, null, null);
 
         if ('\\' !== DIRECTORY_SEPARATOR && file_exists('/dev/tty') && is_readable('/dev/tty')) {
             try {

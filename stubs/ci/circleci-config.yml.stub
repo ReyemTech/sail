@@ -61,6 +61,15 @@ jobs:
       - run:
           name: Build Docker Images and Helm Chart
           command: |
+            # Frontend build-time configuration. Bundlers inline VITE_* values during
+            # the image build, so a runtime env var is too late. Define these as
+            # project or context environment variables; unset values stay empty and
+            # Sail drops them.
+            export VITE_SENTRY_DSN="${VITE_SENTRY_DSN:-}"
+            export VITE_SENTRY_RELEASE="${VITE_SENTRY_RELEASE:-$VERSION}"
+            export SENTRY_ORG="${SENTRY_ORG:-}"
+            export SENTRY_PROJECT="${SENTRY_PROJECT:-}"
+            export SENTRY_AUTH_TOKEN="${SENTRY_AUTH_TOKEN:-}"
             php artisan sail:build \
               --environments=production \
               --architectures=linux/amd64,linux/arm64 \
