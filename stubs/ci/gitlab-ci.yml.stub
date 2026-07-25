@@ -42,6 +42,15 @@ build:
         VERSION=$(date +'%Y.%m.%d')-${CI_COMMIT_SHORT_SHA}
       fi
     - composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+    # Frontend build-time configuration. Bundlers inline VITE_* values during the
+    # image build, so a runtime env var is too late. Define these as CI/CD variables
+    # (mask SENTRY_AUTH_TOKEN); unset values stay empty and Sail drops them.
+    - |
+      export VITE_SENTRY_DSN="${VITE_SENTRY_DSN:-}"
+      export VITE_SENTRY_RELEASE="${VITE_SENTRY_RELEASE:-$VERSION}"
+      export SENTRY_ORG="${SENTRY_ORG:-}"
+      export SENTRY_PROJECT="${SENTRY_PROJECT:-}"
+      export SENTRY_AUTH_TOKEN="${SENTRY_AUTH_TOKEN:-}"
     - |
       php artisan sail:build \
         --environments=production \

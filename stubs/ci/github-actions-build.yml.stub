@@ -159,6 +159,15 @@ __DB_ENV__
           ARCHS: ${{ matrix.arch }}
           RUNTIME_DIR: ${{ env.RUNTIME_DIR }}
           APP_DIR: "."
+          # Frontend build-time configuration. Bundlers inline VITE_* values during
+          # the image build, so a runtime env var is too late. All optional: unset
+          # values arrive empty and the build behaves as if they were never added.
+          # Set the non-secret ones as repository variables, the token as a secret.
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          VITE_SENTRY_RELEASE: ${{ needs.release-please.outputs.version }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           VERSION="${BUILD_VERSION}-${SUFFIX}" \
           docker buildx bake \

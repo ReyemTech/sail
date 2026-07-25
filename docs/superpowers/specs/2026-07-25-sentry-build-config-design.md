@@ -58,10 +58,12 @@ Rationale for the key names: these are the names the Sentry SDK and `@sentry/vit
 already use, so a consuming app that has configured Sentry at all already has them in `.env`.
 Introducing `SAIL_BUILD_SENTRY_*` aliases would mean two names for one value.
 
-`VITE_SENTRY_RELEASE` falls back to `SAIL_BUILD_VERSION` so the release tag tracks the image
-version without separate configuration. It does **not** fall back to `config('sail.build.version')`,
-because the config value may have been bumped in-process by `sail:build --bump` after config
-resolution; reading the raw env keeps the two independent and predictable.
+`VITE_SENTRY_RELEASE` has **no** config-time fallback. Defaulting it to `env('SAIL_BUILD_VERSION')`
+in the config file would be wrong twice over: it would emit a release for every project that sets
+a build version whether or not Sentry is configured at all, and a config-time `env()` read cannot
+see a version supplied by `--build-version` or mutated by `--bump`. The default is applied at
+build time instead (see §2), from the same resolved value used for the `VERSION` arg, and only
+once a DSN makes a release name meaningful.
 
 `array_filter` at the config layer means an unset value is absent from the array rather than
 present-and-empty. Downstream code then never has to distinguish the two.
@@ -70,18 +72,30 @@ Both keys read through `env()`, which resolves from `$_ENV`/`$_SERVER` when no `
 exists. A CI runner that exposes `SENTRY_ORG` as a pipeline variable therefore works with no
 `.env` file present — this is what makes one mechanism serve local and CI.
 
-### 2. Forwarding args (`InteractsWithDocker::build()`)
+### 2. Forwarding args (`InteractsWithDocker::buildDockerImages()`)
 
-Merge the configured args into the existing `$args` array before `createBakeCommand()`:
+Merge the configured args *underneath* the existing `$args` array before `createBakeCommand()`:
 
 ```php
-$args = array_merge($args, config('sail.build.args', []));
+$args = array_merge($this->frontendBuildArgs($args['VERSION']), $args);
 ```
 
-Because empty values were already filtered out, an app with no Sentry configuration produces a
-byte-identical bake command to today. Sail's own keys are listed first so a stray identically
-named config entry cannot clobber `VERSION` or `ARCHS` — the merge order is deliberate and
-worth a comment.
+`array_merge` lets the later array win, so putting Sail's own keys second is what prevents a
+config entry named `VERSION` or `ARCHS` from clobbering a value Sail derives itself. The merge
+order is load-bearing and carries a comment saying so.
+
+`frontendBuildArgs()` reads `config('sail.build.args')` through a shared helper that discards
+anything that is not a non-empty scalar — values become environment variables, so a nested array
+is dropped rather than coerced. It then applies the release default: when a DSN is present and no
+release is configured, `VITE_SENTRY_RELEASE` takes the version being built.
+
+`createBakeCommand()` renders each value with `escapeshellarg()`. Existing values (`ARCHS`,
+`APP_NAME`) were shell-safe by construction, but a DSN or a release name derived from
+`git describe` is not, so quoting them is a correctness requirement rather than a nicety. The
+rendered command stays valid for every existing key.
+
+With nothing configured, the helper returns an empty array and the command is unchanged apart
+from that quoting.
 
 ### 3. Forwarding the secret without leaking it
 
@@ -114,10 +128,15 @@ secret/variable mechanism and empty when unconfigured.
   `SENTRY_AUTH_TOKEN` from `${{ secrets.SENTRY_AUTH_TOKEN }}`, and
   `VITE_SENTRY_RELEASE: ${{ needs.release-please.outputs.version }}`. Bake reads them from the
   environment directly; no artisan involvement.
-- The five artisan-based stubs — export the same five variables in the build step before
-  `php artisan sail:build`, using each provider's secret syntax (GitLab CI/CD variables, Azure
-  pipeline variables, CircleCI context/env, CodeBuild `secrets-manager` / env, Travis encrypted
-  env).
+- GitLab, CircleCI, CodeBuild and Travis expose their configured variables to the job environment
+  already, so those stubs `export NAME="${NAME:-}"` before `php artisan sail:build`. The exports
+  are no-ops that document the contract and survive `set -u`; `VITE_SENTRY_RELEASE` defaults to
+  the `$VERSION` the stub already computes.
+- Azure DevOps does **not** expose secret variables to the environment automatically, so the
+  build task gets an explicit `env:` mapping. Azure also leaves an undefined `$(NAME)` as literal
+  text, which would be forwarded to the build as a bogus value, so the stub declares empty
+  defaults in its `variables:` block. Pipeline variables set in the UI take precedence over
+  those, which is where real values and the secret belong.
 
 An unconfigured pipeline passes empty strings, which the config-layer `array_filter` discards.
 
@@ -172,8 +191,9 @@ Feature tests under `tests/Feature`, following existing command-test patterns:
 3. **Token never printed.** With `SENTRY_AUTH_TOKEN` set, assert the string does not appear in
    the command string or in captured command output, and that it *is* present in the env array
    handed to `runCommands()`.
-4. **Release falls back to build version.** With `SAIL_BUILD_VERSION` set and
-   `VITE_SENTRY_RELEASE` unset, assert `VITE_SENTRY_RELEASE` resolves to the build version.
+4. **Release falls back to build version.** With a DSN set and `VITE_SENTRY_RELEASE` unset,
+   assert it resolves to the version being built; with no DSN, assert no release is emitted;
+   with an explicit release, assert it wins.
 5. **Sail keys win the merge.** With a config arg named `VERSION`, assert Sail's own value survives.
 6. **Orphan-token warning.** Token set, org unset → warning emitted, exit code unchanged.
 7. **CI stub generation.** For each of the six providers, assert `sail:ci` output contains the

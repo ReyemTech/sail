@@ -310,6 +310,24 @@ Key flags:
 - `--repository=none` — local-only build (disables push)
 - `--remove-vendor-node-modules` / `--keep-vendor-node-modules` — strip or keep `vendor/` and `node_modules/` in the final image (stripped by default)
 
+### Frontend build-time configuration
+
+Assets are built **inside** the image, and bundlers such as Vite inline `VITE_*` values at build time. Anything the browser needs must therefore exist during the image build — a container runtime env var (Helm, a Kubernetes secret) arrives too late and leaves the value `undefined` in the shipped bundle.
+
+Sail forwards these to the asset build when they are set:
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_SENTRY_DSN` | Sentry DSN inlined into the browser bundle. Without it the browser SDK silently self-disables. |
+| `VITE_SENTRY_RELEASE` | Release name. Defaults to the version being built when a DSN is set. |
+| `SENTRY_ORG` | Sentry organization slug, used by `@sentry/vite-plugin`. |
+| `SENTRY_PROJECT` | Sentry project slug. |
+| `SENTRY_AUTH_TOKEN` | Enables sourcemap upload. Passed as a BuildKit secret, so it never lands in an image layer, in `docker history`, or in the build command Sail prints. |
+
+Set them in `.env` locally or as CI variables — `config/sail.php` reads them through `env()`, which resolves from the process environment when no `.env` file exists. Every value is optional; with none set the build is byte-identical to before.
+
+Adding a variable of your own means adding it in three places: `config/sail.php` under `build.args`, a `variable` block in `runtimes/8.x/docker-bake.hcl`, and an `ARG` in `runtimes/8.x/Dockerfile.app-build`. Bake resolves target args through declared variables, so an undeclared name is silently dropped.
+
 Validation rules:
 
 - Environments must be within `local, production`
@@ -387,7 +405,7 @@ The fork ships a Sentinel-aware phpredis client (`src/Redis/`) that discovers th
 
 ## Docker runtimes
 
-- PHP runtimes live in `runtimes/` as Docker Bake files: `runtimes/8.x` is parameterized via `PHP_VERSION` (default `8.4`) and `runtimes/8.5` reuses the same bake structure pinned to `PHP_VERSION=8.5`.
+- PHP runtimes live in `runtimes/8.x` as a single Docker Bake file, parameterized via `PHP_VERSION` (default `8.4`). One runtime covers every supported 8.x release; there is no per-version directory.
 - Multi-stage targets: `base`, `app`, and `production` (cli/fpm).
 
 ## CI/CD generation
@@ -432,6 +450,8 @@ Every generated pipeline:
 | CircleCI | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`; ECR: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
 | AWS CodeBuild | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`; IAM role for ECR (no static credentials) |
 | Travis CI | `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` |
+
+Every generated pipeline also carries the frontend build-time wiring described under [Frontend build-time configuration](#frontend-build-time-configuration). Define `VITE_SENTRY_DSN`, `SENTRY_ORG` and `SENTRY_PROJECT` as ordinary variables and `SENTRY_AUTH_TOKEN` as a secret; `VITE_SENTRY_RELEASE` is set to the version being built. Leave them unset and the pipeline behaves as before.
 
 ## Development
 
