@@ -2,6 +2,17 @@ FROM base
 
 ARG REMOVE_NODE_MODULES=true
 
+# Frontend build-time configuration. Bundlers such as Vite inline VITE_* values at
+# build time, so anything the browser needs must be present for `npm run build`
+# below — a runtime container env var is too late. These are safe as build args:
+# a Sentry DSN, org, project and release name are all public once the bundle ships.
+# SENTRY_AUTH_TOKEN is NOT an arg; it is mounted as a BuildKit secret so it never
+# lands in an image layer or in `docker history`.
+ARG VITE_SENTRY_DSN=""
+ARG VITE_SENTRY_RELEASE=""
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
+
 # Clean application directory
 RUN rm -rf /var/www/*
 
@@ -31,7 +42,12 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 # Install and build frontend assets using npm
 RUN npm ci
 
-RUN npm run build
+# The secret is optional: with no token mounted SENTRY_AUTH_TOKEN is empty, which
+# is exactly the pre-existing behaviour (no sourcemap upload), so apps that do not
+# use Sentry build unchanged.
+RUN --mount=type=secret,id=sentry_auth_token,required=false \
+    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
+    npm run build
 
 # Clean up build artifacts to reduce final image size
 RUN if [ "$REMOVE_NODE_MODULES" = "true" ]; then \

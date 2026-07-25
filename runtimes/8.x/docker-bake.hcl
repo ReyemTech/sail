@@ -38,6 +38,25 @@ variable "REMOVE_NODE_MODULES" {
     default = "true"
 }
 
+# Frontend build-time configuration, forwarded to Dockerfile.app-build so bundlers
+# can inline it during `npm run build`. All default to empty so apps that do not
+# use Sentry are unaffected. The auth token is passed as a secret, not a variable.
+variable "VITE_SENTRY_DSN" {
+    default = ""
+}
+
+variable "VITE_SENTRY_RELEASE" {
+    default = ""
+}
+
+variable "SENTRY_ORG" {
+    default = ""
+}
+
+variable "SENTRY_PROJECT" {
+    default = ""
+}
+
 group "default" {
     targets = ["app", "production-cli", "production-fpm"]
 }
@@ -76,7 +95,16 @@ target "app-build" {
     }
     args = {
         REMOVE_NODE_MODULES = "${REMOVE_NODE_MODULES}"
+        VITE_SENTRY_DSN = "${VITE_SENTRY_DSN}"
+        VITE_SENTRY_RELEASE = "${VITE_SENTRY_RELEASE}"
+        SENTRY_ORG = "${SENTRY_ORG}"
+        SENTRY_PROJECT = "${SENTRY_PROJECT}"
     }
+    # Optional; when SENTRY_AUTH_TOKEN is unset BuildKit supplies no secret and the
+    # build behaves exactly as before.
+    secret = [
+        "type=env,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN",
+    ]
 }
 
 target "production" {
