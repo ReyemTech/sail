@@ -1,5 +1,14 @@
 # Release Notes
 
+## [3.6.0](https://github.com/ReyemTech/sail/compare/v3.5.2...v3.6.0) (2026-07-25)
+
+
+### Features
+
+* **build:** source frontend build-time config from sail config ([c76e854](https://github.com/ReyemTech/sail/commit/c76e85413bcaaa87532a9400c06b99c734f82d03))
+* **runtime:** forward frontend build-time config to the asset build ([6c03bc6](https://github.com/ReyemTech/sail/commit/6c03bc65e23fe3af365538ae753dd24727f72cc4))
+* **runtime:** forward frontend build-time config to the asset build ([887cd57](https://github.com/ReyemTech/sail/commit/887cd57ad891994fd1edd00674d95a6af4b0eecd))
+
 ## [3.5.2](https://github.com/ReyemTech/sail/compare/v3.5.1...v3.5.2) (2026-07-24)
 
 
