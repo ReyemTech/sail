@@ -30,7 +30,7 @@ class CoreGuidelineTest extends TestCase
             'back up `CLAUDE.md`',
             'diff `CLAUDE.md` against the backup',
             'restore `CLAUDE.md` from the backup if any existing section disappears',
-            'When `ERR_SSL_UNRECOGNIZED_NAME_ALERT` occurs in LAN shared-proxy mode and the app container is stuck in `created`, remember that this documented collision chain is not a certificate problem; check port and subnet collisions before changing certificates or mkcert.',
+            'When `ERR_SSL_UNRECOGNIZED_NAME_ALERT` occurs in LAN shared-proxy mode and either Compose failed to create the network or the app container is stuck in `created`, remember that this documented collision chain is not a certificate problem; check port and subnet collisions before changing certificates or mkcert.',
             'SAIL_BIND_IP',
             'SAIL_SUBNET',
             '~/.config/sail/registry.json',
@@ -48,10 +48,13 @@ class CoreGuidelineTest extends TestCase
             'typesense',
             'docker network inspect $(docker network ls -q) --format \'{{.Name}} {{range .IPAM.Config}}{{.Subnet}}{{end}}\'',
             'docker ps --format \'{{.Names}}\t{{.Ports}}\'',
+            'subnet overlaps -> Compose fails to create the network before the app container exists',
+            'Run `docker compose up -d` and read its output first for network-creation failures',
             'docker compose ps -a',
             "docker inspect <container> --format '{{.State.Error}}'",
+            'Use `.State.Error` for container-start failures only',
             'docker logs',
-            'Pool overlaps with other one on this address space',
+            'overlap with any existing Docker network, including broader or narrower subnets',
             '~/.config/sail/certs/mkcert-rootCA.pem',
             'tls=0',
             '502',
@@ -67,6 +70,7 @@ class CoreGuidelineTest extends TestCase
             '172.21.0.0/24',
             'VITE_PORT=5203',
             'Horizon',
+            'another project already holding that `SAIL_SUBNET`',
         ] as $projectSpecific) {
             $this->assertStringNotContainsString($projectSpecific, $this->guideline);
         }

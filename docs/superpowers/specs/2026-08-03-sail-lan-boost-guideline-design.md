@@ -19,16 +19,16 @@ Match the existing guideline style:
 
 The LAN section must:
 
-- State up front that `ERR_SSL_UNRECOGNIZED_NAME_ALERT` in this failure mode is not a certificate problem.
+- State up front that `ERR_SSL_UNRECOGNIZED_NAME_ALERT` after failed Compose network creation or an app container stuck in `created` follows this collision chain and is not a certificate problem.
 - Explain that LAN shared-proxy mode puts projects behind one `nginx-proxy` on one `SAIL_BIND_IP`, requiring a unique `SAIL_SUBNET` and unique published ports per project.
 - Explain that Sail records a slot in `~/.config/sail/registry.json` and calculates allocated ports as `base + slot * 10`.
 - Name the fully covered services in `forwardPortMap()`: MySQL, PostgreSQL, MariaDB, Redis, and Valkey.
 - Explain that Mailpit coverage is partial: Sail offsets `FORWARD_MAILPIT_DASHBOARD_PORT`, but not the SMTP `FORWARD_MAILPIT_PORT`.
 - State that Sail does not currently allocate `SAIL_SUBNET`, `VITE_PORT`, Mailpit SMTP, or MinIO, Gotenberg, and Typesense ports.
-- Show the complete failure chain from a port or subnet collision through a container stuck in `created`, missing `VIRTUAL_HOST`, missing generated vhost, and rejected SNI.
-- Prescribe bottom-up diagnosis with `docker compose ps -a`, `docker inspect <container> --format '{{.State.Error}}'`, proxy configuration inspection, and certificate inspection only after those checks.
+- Show both failure paths: a port collision leaves a container in `created`, while a subnet overlap fails Compose network creation before the app container exists; both prevent a running `VIRTUAL_HOST`, generated vhost, and matching SNI server block.
+- Prescribe bottom-up diagnosis with `docker compose up -d` output for network-creation failures, then `docker compose ps -a` and `docker inspect <container> --format '{{.State.Error}}'` for container-start failures, followed by proxy configuration and certificate inspection.
 - Warn that `docker logs` is empty when a container never started and that the actionable error exists only in `.State.Error`.
-- Explain that `Pool overlaps with other one on this address space` means another project holds the selected `SAIL_SUBNET`.
+- Explain that `Pool overlaps with other one on this address space` can refer to any existing Docker network, including broader or narrower subnet ranges, and direct users to network inspection to identify it.
 - Verify HTTPS with `curl --cacert ~/.config/sail/certs/mkcert-rootCA.pem`, interpreting `tls=0` as successful certificate verification.
 - Explain that a `502` immediately after `up -d` usually means the application is still booting and should be retried.
 

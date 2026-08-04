@@ -44,7 +44,7 @@
 
 # Sail LAN Networking
 
-- When `ERR_SSL_UNRECOGNIZED_NAME_ALERT` occurs in LAN shared-proxy mode and the app container is stuck in `created`, remember that this documented collision chain is not a certificate problem; check port and subnet collisions before changing certificates or mkcert.
+- When `ERR_SSL_UNRECOGNIZED_NAME_ALERT` occurs in LAN shared-proxy mode and either Compose failed to create the network or the app container is stuck in `created`, remember that this documented collision chain is not a certificate problem; check port and subnet collisions before changing certificates or mkcert.
 
 ## Shared Proxy Invariant
 
@@ -62,20 +62,23 @@
 - Follow the actual failure chain:
 
 ```text
-port or subnet already taken on the host
+port already taken on the host
   -> app container fails to start and stays in `created`
+subnet overlaps -> Compose fails to create the network before the app container exists
+either failure
   -> no running `VIRTUAL_HOST` container on `sail-shared`
   -> nginx-proxy generates no vhost for the domain
   -> TLS has no matching SNI server block
   -> ERR_SSL_UNRECOGNIZED_NAME_ALERT
 ```
 
+- Run `docker compose up -d` and read its output first for network-creation failures; these errors occur before a new app container exists.
 - Run `docker compose ps -a`; confirm whether the app container is `running`, `created`, or `exited`.
-- Run `docker inspect <container> --format '@{{.State.Error}}'`; use this as the source of the real startup error.
+- Run `docker inspect <container> --format '@{{.State.Error}}'` when the container exists but did not start. Use `.State.Error` for container-start failures only.
 - Do not rely on `docker logs` for a container that never started; its logs are empty and the error exists only in `.State.Error`.
 - Run `docker exec <proxy> grep <domain> /etc/nginx/conf.d/default.conf`; confirm that the proxy generated the vhost.
 - Inspect certificates only after the container is running and the vhost exists.
-- Interpret `Pool overlaps with other one on this address space` as another project already holding that `SAIL_SUBNET`.
+- Interpret `Pool overlaps with other one on this address space` as an overlap with any existing Docker network, including broader or narrower subnets; use the network inspection above to identify the conflict.
 
 ## Verify The Fix
 
