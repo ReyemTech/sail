@@ -51,8 +51,8 @@
 - Remember that every LAN project shares one `nginx-proxy` on one `SAIL_BIND_IP`.
 - Give every project a unique `SAIL_SUBNET` and unique published ports.
 - Read the assigned project slot from `~/.config/sail/registry.json`; Sail derives allocated ports as `base + slot * 10`.
-- Expect automatic offsets only for `mysql`, `pgsql`, `mariadb`, `redis`, `valkey`, and `mailpit` because those are the services in `forwardPortMap()`.
-- Allocate `SAIL_SUBNET`, `VITE_PORT`, and published ports for `minio`, `gotenberg`, and `typesense` yourself; Sail does not currently offset them.
+- Expect automatic offsets for `mysql`, `pgsql`, `mariadb`, `redis`, and `valkey`, plus only the Mailpit dashboard through `FORWARD_MAILPIT_DASHBOARD_PORT`.
+- Allocate `SAIL_SUBNET`, `VITE_PORT`, Mailpit SMTP through `FORWARD_MAILPIT_PORT`, and published ports for `minio`, `gotenberg`, and `typesense` yourself; Sail does not currently offset them.
 - Check existing allocations before changing values:
   - Networks: `docker network inspect $(docker network ls -q) --format '@{{.Name}} @{{range .IPAM.Config}}@{{.Subnet}}@{{end}}'`
   - Ports: `docker ps --format '@{{.Names}}\t@{{.Ports}}'`

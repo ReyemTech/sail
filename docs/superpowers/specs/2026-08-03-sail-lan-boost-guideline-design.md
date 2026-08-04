@@ -22,8 +22,9 @@ The LAN section must:
 - State up front that `ERR_SSL_UNRECOGNIZED_NAME_ALERT` in this failure mode is not a certificate problem.
 - Explain that LAN shared-proxy mode puts projects behind one `nginx-proxy` on one `SAIL_BIND_IP`, requiring a unique `SAIL_SUBNET` and unique published ports per project.
 - Explain that Sail records a slot in `~/.config/sail/registry.json` and calculates allocated ports as `base + slot * 10`.
-- Name the services covered by `forwardPortMap()`: MySQL, PostgreSQL, MariaDB, Redis, Valkey, and Mailpit.
-- State that Sail does not currently allocate `SAIL_SUBNET`, `VITE_PORT`, or MinIO, Gotenberg, and Typesense ports.
+- Name the fully covered services in `forwardPortMap()`: MySQL, PostgreSQL, MariaDB, Redis, and Valkey.
+- Explain that Mailpit coverage is partial: Sail offsets `FORWARD_MAILPIT_DASHBOARD_PORT`, but not the SMTP `FORWARD_MAILPIT_PORT`.
+- State that Sail does not currently allocate `SAIL_SUBNET`, `VITE_PORT`, Mailpit SMTP, or MinIO, Gotenberg, and Typesense ports.
 - Show the complete failure chain from a port or subnet collision through a container stuck in `created`, missing `VIRTUAL_HOST`, missing generated vhost, and rejected SNI.
 - Prescribe bottom-up diagnosis with `docker compose ps -a`, `docker inspect <container> --format '{{.State.Error}}'`, proxy configuration inspection, and certificate inspection only after those checks.
 - Warn that `docker logs` is empty when a container never started and that the actionable error exists only in `.State.Error`.

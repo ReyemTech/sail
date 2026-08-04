@@ -50,7 +50,7 @@
 Create `tests/Unit/Boost/CoreGuidelineTest.php`. Render `resources/boost/guidelines/core.blade.php` through `Blade::render()` and assert:
 
 - Representative existing content remains: `# ReyemTech Sail` and `sail:build`.
-- Every required LAN invariant, service, diagnostic, overlap, CA, TLS, and transient `502` term is present.
+- Every required LAN invariant, service, diagnostic, overlap, CA, TLS, and transient `502` term is present, including the distinction between automatically offset Mailpit dashboard traffic and manually allocated Mailpit SMTP.
 - The rendered network-inspection, port-listing, and container-inspection commands contain their exact literal Docker Go templates (`{{...}}`).
 - `slot 3`, `172.21.0.0/24`, `VITE_PORT=5203`, and `Horizon` remain absent.
 - `resources/boost/guidelines/lan-networking.blade.php` does not exist.
