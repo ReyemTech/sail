@@ -8,7 +8,9 @@
 
 ## Install / Update
 - Install package per project composer requirements.
-- Run `php artisan boost:install` (or `boost:update`) so Boost pulls this guideline.
+- During `php artisan boost:install`, accept `reyemtech/sail` when prompted; if installation already ran, rerun `php artisan boost:update --discover` and accept it.
+- Before either discovery command, back up `CLAUDE.md`.
+- After discovery, diff `CLAUDE.md` against the backup; restore `CLAUDE.md` from the backup if any existing section disappears.
 
 ## Build Command (sail:build)
 - Non-interactive flags:
@@ -39,3 +41,50 @@
 - Prefer non-interactive flags in automation (CI/CD).
 - Keep vendor PVC enabled for scheduler to avoid repeated `composer install`.
 - Update Helm values for storage class/size when cluster defaults differ.
+
+# Sail LAN Networking
+
+- When `ERR_SSL_UNRECOGNIZED_NAME_ALERT` occurs in LAN shared-proxy mode and the app container is stuck in `created`, remember that this documented collision chain is not a certificate problem; check port and subnet collisions before changing certificates or mkcert.
+
+## Shared Proxy Invariant
+
+- Remember that every LAN project shares one `nginx-proxy` on one `SAIL_BIND_IP`.
+- Give every project a unique `SAIL_SUBNET` and unique published ports.
+- Read the assigned project slot from `~/.config/sail/registry.json`; Sail derives allocated ports as `base + slot * 10`.
+- Expect automatic offsets only for `mysql`, `pgsql`, `mariadb`, `redis`, `valkey`, and `mailpit` because those are the services in `forwardPortMap()`.
+- Allocate `SAIL_SUBNET`, `VITE_PORT`, and published ports for `minio`, `gotenberg`, and `typesense` yourself; Sail does not currently offset them.
+- Check existing allocations before changing values:
+  - Networks: `docker network inspect $(docker network ls -q) --format '@{{.Name}} @{{range .IPAM.Config}}@{{.Subnet}}@{{end}}'`
+  - Ports: `docker ps --format '@{{.Names}}\t@{{.Ports}}'`
+
+## Diagnose SNI Rejection Bottom-Up
+
+- Follow the actual failure chain:
+
+```text
+port or subnet already taken on the host
+  -> app container fails to start and stays in `created`
+  -> no running `VIRTUAL_HOST` container on `sail-shared`
+  -> nginx-proxy generates no vhost for the domain
+  -> TLS has no matching SNI server block
+  -> ERR_SSL_UNRECOGNIZED_NAME_ALERT
+```
+
+- Run `docker compose ps -a`; confirm whether the app container is `running`, `created`, or `exited`.
+- Run `docker inspect <container> --format '@{{.State.Error}}'`; use this as the source of the real startup error.
+- Do not rely on `docker logs` for a container that never started; its logs are empty and the error exists only in `.State.Error`.
+- Run `docker exec <proxy> grep <domain> /etc/nginx/conf.d/default.conf`; confirm that the proxy generated the vhost.
+- Inspect certificates only after the container is running and the vhost exists.
+- Interpret `Pool overlaps with other one on this address space` as another project already holding that `SAIL_SUBNET`.
+
+## Verify The Fix
+
+- Verify with the shared trusted root instead of the browser cache:
+
+```bash
+curl -sS -o /dev/null -w '%{http_code} tls=%{ssl_verify_result}\n' \
+  --cacert ~/.config/sail/certs/mkcert-rootCA.pem https://<domain>/
+```
+
+- Read `tls=0` as successful certificate verification.
+- Retry a `502` immediately after `up -d`; it usually means the application is still booting.
