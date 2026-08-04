@@ -236,6 +236,20 @@ sail up      # auto-starts the shared proxy the first time
 
 Return any project to local-only mode with `sail artisan sail:network --mode=local`.
 
+### Laravel Boost guidelines
+
+ReyemTech Sail ships package-specific AI guidance under `resources/boost/guidelines`. Laravel Boost discovers it as third-party package guidance; no package registration is required.
+
+Third-party guidance is opt-in. Accept `reyemtech/sail` when running `php artisan boost:install`, or rerun discovery in an existing application:
+
+```bash
+php artisan boost:update --discover
+```
+
+Applications that previously declined the package, or installed Boost before new guidance was added, do not receive it automatically.
+
+> **Caution:** Back up `CLAUDE.md` and inspect its Git diff before and after running Boost discovery. `boost:update` has been observed removing unrelated package sections in a consuming application; the cause is not yet known. Restore the backup if any existing section disappears.
+
 ### One dedicated LAN IP per project (`lan-direct`)
 
 If you'd rather **not** share a proxy and want each project on its own real LAN
