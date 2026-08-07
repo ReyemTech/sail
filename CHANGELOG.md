@@ -1,5 +1,13 @@
 # Release Notes
 
+## [3.7.1](https://github.com/ReyemTech/sail/compare/v3.7.0...v3.7.1) (2026-08-07)
+
+
+### Bug Fixes
+
+* **network:** require tty for mdns prompts ([33c7d21](https://github.com/ReyemTech/sail/commit/33c7d21d9907085517bbb3f22ad8986f54545a84))
+* **runtime:** forward php version to bake ([964638d](https://github.com/ReyemTech/sail/commit/964638dd36a6f629a15fa1269d40d79d8e7f51d7))
+
 ## [3.7.0](https://github.com/ReyemTech/sail/compare/v3.6.0...v3.7.0) (2026-08-07)
 
 
