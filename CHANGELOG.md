@@ -1,5 +1,20 @@
 # Release Notes
 
+## [3.7.0](https://github.com/ReyemTech/sail/compare/v3.6.0...v3.7.0) (2026-08-07)
+
+
+### Features
+
+* **boost:** add LAN networking guidance ([78691a7](https://github.com/ReyemTech/sail/commit/78691a7607b84d41cf0e1ac11c83807c836ff7ba))
+* **boost:** add LAN networking guidance ([609b16d](https://github.com/ReyemTech/sail/commit/609b16d9f6bd68e410ca13b9b4021393915d60ae))
+
+
+### Bug Fixes
+
+* **boost:** clarify Mailpit port allocation ([37d263f](https://github.com/ReyemTech/sail/commit/37d263faec01df4691fb3b5bafb85b8cd44b22b3))
+* **boost:** distinguish subnet creation failures ([85225ae](https://github.com/ReyemTech/sail/commit/85225ae1f6631b838f6a4b26b4e559df281fc0d9))
+* **runtime:** support lan bake certificates ([c58a4c2](https://github.com/ReyemTech/sail/commit/c58a4c263ef3802337bd721ea8a296e69c873781))
+
 ## [3.6.0](https://github.com/ReyemTech/sail/compare/v3.5.2...v3.6.0) (2026-07-25)
 
 
