@@ -441,7 +441,7 @@ trait InteractsWithDockerComposeServices
 
         // Only offer to run the fix in a real terminal; CI / non-TTY just gets the
         // warning above (auto-running sudo unattended would be surprising).
-        if (! $this->input->isInteractive()) {
+        if (! $this->input->isInteractive() || ! stream_isatty(STDIN)) {
             return;
         }
 
@@ -502,7 +502,7 @@ trait InteractsWithDockerComposeServices
 
         $this->components->info('Fix: '.$apply);
 
-        if (! $this->input->isInteractive()) {
+        if (! $this->input->isInteractive() || ! stream_isatty(STDIN)) {
             return;
         }
 
