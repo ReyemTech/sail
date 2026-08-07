@@ -44,7 +44,6 @@ RUN apk add --no-cache \
     php${VERSION}-intl \
     php${VERSION}-mbstring \
     php${VERSION}-mysqlnd \
-    php${VERSION}-opcache \
     php${VERSION}-pcntl \
     php${VERSION}-pdo \
     php${VERSION}-pdo_mysql \
