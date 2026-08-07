@@ -1,5 +1,13 @@
 # Release Notes
 
+## [3.7.2](https://github.com/ReyemTech/sail/compare/v3.7.1...v3.7.2) (2026-08-07)
+
+
+### Bug Fixes
+
+* **runtime:** install opcache for older php ([0cbe6c0](https://github.com/ReyemTech/sail/commit/0cbe6c07a2a4b421bf846307ef5023bbc8b64db2))
+* **runtime:** use bundled alpine opcache ([8ca3577](https://github.com/ReyemTech/sail/commit/8ca35773e8dfdffede81c444db2d06c0a61b1287))
+
 ## [3.7.1](https://github.com/ReyemTech/sail/compare/v3.7.0...v3.7.1) (2026-08-07)
 
 
