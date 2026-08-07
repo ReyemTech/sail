@@ -27,13 +27,14 @@ class LocalRuntimeBakeTest extends TestCase
         );
     }
 
-    public function test_local_up_resolves_compose_alpine_arguments_and_stops_on_bake_failure(): void
+    public function test_local_up_forwards_php_and_compose_alpine_arguments_and_stops_on_bake_failure(): void
     {
         $sail = file_get_contents(__DIR__.'/../../bin/sail');
 
         $this->assertNotFalse($sail);
         $this->assertStringContainsString('config --format json', $sail);
         $this->assertStringContainsString('"CERTS_DIR=$BUILD_CERTS_DIR"', $sail);
+        $this->assertStringContainsString('"PHP_VERSION=$PHP_VERSION"', $sail);
         $this->assertStringContainsString('exit "$BAKE_EXIT"', $sail);
     }
 }

@@ -467,10 +467,12 @@ elif [ "$1" == "up" ]; then
             }
         ')
         ALPINE_VERSION=${COMPOSE_ALPINE_VERSION:-${ALPINE_VERSION:-}}
+        PHP_VERSION=${PHP_VERSION:-8.4}
         BAKE_ENV=(
             "APP_DIR=$APP_DIR"
             "RUNTIME_DIR=$RUNTIME_DIR"
             "CERTS_DIR=$BUILD_CERTS_DIR"
+            "PHP_VERSION=$PHP_VERSION"
             "ORG=$ORG"
             "APP_NAME=$APP_NAME"
             "VERSION=$VERSION"
