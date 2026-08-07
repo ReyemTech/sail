@@ -27,12 +27,13 @@ class LocalRuntimeBakeTest extends TestCase
         );
     }
 
-    public function test_the_shared_runtime_does_not_request_a_split_opcache_package(): void
+    public function test_the_shared_runtime_installs_opcache_only_for_php_versions_that_need_it(): void
     {
         $dockerfile = file_get_contents(__DIR__.'/../../runtimes/8.x/Dockerfile.base');
 
         $this->assertNotFalse($dockerfile);
-        $this->assertStringNotContainsString('php${VERSION}-opcache', $dockerfile);
+        $this->assertStringNotContainsString('    php${VERSION}-opcache \\', $dockerfile);
+        $this->assertStringContainsString('if [ "${VERSION}" != "85" ]; then apk add --no-cache "php${VERSION}-opcache"; fi', $dockerfile);
     }
 
     public function test_local_up_forwards_php_and_compose_alpine_arguments_and_stops_on_bake_failure(): void
