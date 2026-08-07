@@ -61,8 +61,8 @@ class S6LogPipelineTest extends TestCase
      *   --entrypoint /init. The s6-overlay Alpine package installs /init
      *   into the image, so this produces a fully bootable s6 container.
      *
-     * A dummy mkcert CA cert is created at runtimes/8.x/certs/mkcert-rootCA.pem
-     * if it does not already exist (required by COPY --from=runtime in Dockerfile.base).
+     * A dummy mkcert CA cert is created in a dedicated BuildKit context when one
+     * is not already available (required by Dockerfile.base).
      */
     protected function buildBaseImage(): void
     {
@@ -94,6 +94,7 @@ class S6LogPipelineTest extends TestCase
         $build = new Process([
             'docker', 'buildx', 'build',
             '--load',
+            '--build-context', "certs={$certsDir}",
             '--build-context', "runtime={$runtimeDir}",
             '--platform', $platform,
             '-t', self::$imageTag,

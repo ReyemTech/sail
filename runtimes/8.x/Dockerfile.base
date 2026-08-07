@@ -11,8 +11,9 @@ ARG GUID=1000
 
 ENV VERSION=${PHP_VERSION_NUM}
 
-# Copy mkcert root CA certificate
-COPY --from=runtime certs/mkcert-rootCA.pem /usr/local/share/ca-certificates/mkcert-rootCA.crt
+# Copy the mkcert root CA from its dedicated build context. In shared LAN mode it
+# lives in Sail Home rather than the Composer-managed runtime directory.
+COPY --from=certs mkcert-rootCA.pem /usr/local/share/ca-certificates/mkcert-rootCA.crt
 
 # Install runtime system dependencies (Alpine packages)
 RUN apk add --no-cache \
@@ -105,4 +106,3 @@ RUN rm -f /etc/php*/php-fpm.d/www.conf
 
 # S6
 COPY --from=runtime ./s6/app /etc/s6-overlay/s6-rc.d/
-

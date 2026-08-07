@@ -365,9 +365,9 @@ elif [ "$1" == "up" ]; then
         else
             CERT_CHECK_DIR="$RUNTIME_DIR/certs"
         fi
-        if [ ! -d "$RUNTIME_DIR/certs" ]; then
+        if [ ! -d "$CERT_CHECK_DIR" ]; then
             NEEDS_SETUP=1
-        elif [ ! -f "$RUNTIME_DIR/certs/mkcert-rootCA.pem" ]; then
+        elif [ ! -f "$CERT_CHECK_DIR/mkcert-rootCA.pem" ]; then
             NEEDS_SETUP=1
         elif [ -n "$DOMAIN" ] && [ ! -f "$CERT_CHECK_DIR/$DOMAIN.crt" ]; then
             NEEDS_SETUP=1
@@ -434,7 +434,9 @@ elif [ "$1" == "up" ]; then
     # In lan mode, ensure the shared network + shared proxy are up before starting the project...
     # Runs AFTER sail-setup so the shared proxy mounts certs that already exist.
     SAIL_MODE_UP=$(grep -E '^SAIL_NETWORK_MODE=' .env 2>/dev/null | cut -d '=' -f2 | tr -d '"')
+    BUILD_CERTS_DIR="$RUNTIME_DIR/certs"
     if [ "${SAIL_MODE_UP:-local}" = "lan" ]; then
+        BUILD_CERTS_DIR="${SAIL_HOME:-"$HOME/.config/sail"}/certs"
         ${SAIL_DOCKER_BINARY} network create sail-shared >/dev/null 2>&1 || true
         php artisan sail:proxy up >/dev/null 2>&1 || true
     fi
@@ -455,7 +457,33 @@ elif [ "$1" == "up" ]; then
     BAKE_CMD="docker buildx bake -f ${RUNTIME_DIR}/docker-bake.hcl app"
     if ! docker image inspect "$ORG/$APP_NAME:$VERSION" > /dev/null 2>&1; then
         echo "Docker image $ORG/$APP_NAME:$VERSION does not exist. Building the image..." >&2
-        APP_DIR=$APP_DIR RUNTIME_DIR=$RUNTIME_DIR ORG=$ORG APP_NAME=$APP_NAME VERSION=$VERSION $BAKE_CMD
+        # Compose owns application build arguments. Resolve its rendered value so
+        # Bake uses the same Alpine release as a direct Compose build.
+        COMPOSE_ALPINE_VERSION=$("${COMPOSE_CMD[@]}" config --format json 2>/dev/null | php -r '
+            $config = json_decode(stream_get_contents(STDIN), true);
+            $args = $config["services"][getenv("APP_SERVICE")]["build"]["args"] ?? [];
+            if (is_array($args) && isset($args["ALPINE_VERSION"]) && is_scalar($args["ALPINE_VERSION"])) {
+                print $args["ALPINE_VERSION"];
+            }
+        ')
+        ALPINE_VERSION=${COMPOSE_ALPINE_VERSION:-${ALPINE_VERSION:-}}
+        BAKE_ENV=(
+            "APP_DIR=$APP_DIR"
+            "RUNTIME_DIR=$RUNTIME_DIR"
+            "CERTS_DIR=$BUILD_CERTS_DIR"
+            "ORG=$ORG"
+            "APP_NAME=$APP_NAME"
+            "VERSION=$VERSION"
+        )
+        if [ -n "$ALPINE_VERSION" ]; then
+            BAKE_ENV+=("ALPINE_VERSION=$ALPINE_VERSION")
+        fi
+
+        env "${BAKE_ENV[@]}" $BAKE_CMD
+        BAKE_EXIT=$?
+        if [ "$BAKE_EXIT" -ne 0 ]; then
+            exit "$BAKE_EXIT"
+        fi
     else
         echo "Docker image $ORG/$APP_NAME:$VERSION already exists. Skipping build." >&2
     fi

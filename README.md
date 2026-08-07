@@ -138,7 +138,7 @@ LAN mode:
   Android where mDNS/`.local` does not.
 - Generates a trusted certificate with **mkcert**. To avoid TLS warnings on
   your other devices, import the mkcert root CA
-  (`vendor/reyemtech/sail/certs/mkcert-rootCA.pem`) into each device's trust
+  (`~/.config/sail/certs/mkcert-rootCA.pem`) into each device's trust
   store once.
 
 Return to local-only mode with `sail artisan sail:network --mode=local`.

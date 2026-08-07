@@ -6,8 +6,16 @@ variable "RUNTIME_DIR" {
     default = "./vendor/reyemtech/sail/runtimes/8.x"
 }
 
+variable "CERTS_DIR" {
+    default = "${RUNTIME_DIR}/certs"
+}
+
 variable "PHP_VERSION" {
     default = "8.4"
+}
+
+variable "ALPINE_VERSION" {
+    default = "3.21"
 }
 
 variable "PUSH" {
@@ -66,6 +74,7 @@ target "base" {
     context = "${RUNTIME_DIR}"
     contexts = {
         "runtime" = "${RUNTIME_DIR}"
+        "certs" = "${CERTS_DIR}"
     }
     matrix = {
         tgt = ["cli", "fpm"]
@@ -73,6 +82,7 @@ target "base" {
     platforms = PUSH ? split(",", ARCHS) : split(",", ARCHS)
     dockerfile= "Dockerfile.base"
     args = {
+        ALPINE_VERSION = "${ALPINE_VERSION}"
         BASE_IMAGE = "php:${PHP_VERSION}-${tgt}-alpine"
         PHP_VERSION = "${PHP_VERSION}"
         PHP_VERSION_NUM = replace("${PHP_VERSION}", ".", "")
