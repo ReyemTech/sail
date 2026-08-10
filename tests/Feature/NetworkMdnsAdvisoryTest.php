@@ -14,6 +14,7 @@ class NetworkMdnsAdvisoryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('sail.network.mdns_supported', true);
         $this->base = sys_get_temp_dir().'/sail-mdns-'.uniqid();
         File::makeDirectory($this->base, 0755, true);
         $this->app->setBasePath($this->base);

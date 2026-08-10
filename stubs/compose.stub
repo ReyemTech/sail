@@ -3,12 +3,6 @@ name: '${SAIL_PROJECT}'
 
 services:
     laravel:
-        build:
-            context: ./vendor/reyemtech/sail/runtimes/8.x
-            target: app
-            args:
-                PHP_VERSION: '${PHP_VERSION}'
-                WWWGROUP: '${WWWGROUP}'
         image: '${SAIL_BUILD_ORGANIZATION}/laravel:${SAIL_BUILD_VERSION}'
         extra_hosts:
             - 'host.docker.internal:host-gateway'

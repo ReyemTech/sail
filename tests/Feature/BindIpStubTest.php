@@ -30,6 +30,14 @@ class BindIpStubTest extends TestCase
         $this->assertStringContainsString('${SAIL_BIND_IP:-172.20.0.10}:443:443', $contents);
     }
 
+    public function test_compose_stub_relies_on_the_image_built_by_sail(): void
+    {
+        $contents = file_get_contents(__DIR__.'/../../stubs/compose.stub');
+
+        $this->assertStringNotContainsString('        build:', $contents);
+        $this->assertStringContainsString("        image: '\${SAIL_BUILD_ORGANIZATION}/laravel:\${SAIL_BUILD_VERSION}'", $contents);
+    }
+
     public function test_write_project_env_writes_bind_ip(): void
     {
         $base = sys_get_temp_dir().'/sail-bindip-'.uniqid();

@@ -15,9 +15,18 @@ class HostIpDetector
     public function detect(string $os = PHP_OS_FAMILY): ?string
     {
         if ($os === 'Darwin') {
-            $ip = trim(($this->runner)('ipconfig getifaddr en0'));
+            $interface = trim(($this->runner)('route -n get default 2>/dev/null | awk \'/interface:/{print $2; exit}\''));
+            $interfaces = array_filter([$interface, 'en0']);
 
-            return $this->isPlausibleLanIp($ip) ? $ip : null;
+            foreach (array_unique($interfaces) as $interface) {
+                $ip = trim(($this->runner)("ipconfig getifaddr {$interface}"));
+
+                if ($this->isPlausibleLanIp($ip)) {
+                    return $ip;
+                }
+            }
+
+            return null;
         }
 
         $candidates = preg_split('/\s+/', trim(($this->runner)('hostname -I'))) ?: [];

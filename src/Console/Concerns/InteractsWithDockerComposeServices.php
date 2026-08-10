@@ -286,6 +286,10 @@ trait InteractsWithDockerComposeServices
         // unreliable on Android).
         $resolver = in_array($resolver, ['nip', 'mdns'], true) ? $resolver : 'nip';
 
+        if ($resolver === 'mdns' && ! $this->supportsMdns()) {
+            throw new \RuntimeException('mDNS LAN mode is not supported on macOS yet. Use --resolver=nip instead.');
+        }
+
         $project = $this->resolveProjectName();
 
         $values = (new LanEnvironment($project, $ip, $resolver, $tls))->values();
@@ -383,6 +387,11 @@ trait InteractsWithDockerComposeServices
         }
 
         $resolver = in_array($resolver, ['nip', 'mdns'], true) ? $resolver : 'nip';
+
+        if ($resolver === 'mdns' && ! $this->supportsMdns()) {
+            throw new \RuntimeException('mDNS LAN mode is not supported on macOS yet. Use --resolver=nip instead.');
+        }
+
         $scheme = $tls ? 'https' : 'http';
         $project = $this->resolveProjectName();
 
@@ -406,6 +415,11 @@ trait InteractsWithDockerComposeServices
         $writer->write();
 
         return $values;
+    }
+
+    protected function supportsMdns(): bool
+    {
+        return (bool) config('sail.network.mdns_supported', PHP_OS_FAMILY !== 'Darwin');
     }
 
     /**

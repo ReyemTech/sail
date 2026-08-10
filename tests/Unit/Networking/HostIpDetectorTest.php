@@ -33,6 +33,22 @@ class HostIpDetectorTest extends TestCase
         $this->assertSame('192.168.7.7', $detector->detect('Darwin'));
     }
 
+    public function test_uses_the_default_route_interface_on_macos(): void
+    {
+        $commands = [];
+        $detector = new HostIpDetector(function ($command) use (&$commands) {
+            $commands[] = $command;
+            if (str_contains($command, 'route -n get default')) {
+                return "en7\n";
+            }
+
+            return str_contains($command, 'ipconfig getifaddr') ? "192.168.7.7\n" : '';
+        });
+
+        $this->assertSame('192.168.7.7', $detector->detect('Darwin'));
+        $this->assertContains('ipconfig getifaddr en7', $commands);
+    }
+
     public function test_plausibility_predicate(): void
     {
         $detector = new HostIpDetector(fn ($cmd) => '');
