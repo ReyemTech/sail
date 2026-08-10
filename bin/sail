@@ -490,7 +490,7 @@ elif [ "$1" == "up" ]; then
         echo "Docker image $ORG/$APP_NAME:$VERSION already exists. Skipping build." >&2
     fi
 
-    "${COMPOSE_CMD[@]}" up "$@"
+    "${COMPOSE_CMD[@]}" up --remove-orphans "$@"
 
     exit $?
 

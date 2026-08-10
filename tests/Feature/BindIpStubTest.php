@@ -38,6 +38,14 @@ class BindIpStubTest extends TestCase
         $this->assertStringContainsString("        image: '\${SAIL_BUILD_ORGANIZATION}/laravel:\${SAIL_BUILD_VERSION}'", $contents);
     }
 
+    public function test_sail_up_removes_services_absent_from_the_current_compose_config(): void
+    {
+        $sail = file_get_contents(__DIR__.'/../../bin/sail');
+
+        $this->assertNotFalse($sail);
+        $this->assertStringContainsString('up --remove-orphans', $sail);
+    }
+
     public function test_write_project_env_writes_bind_ip(): void
     {
         $base = sys_get_temp_dir().'/sail-bindip-'.uniqid();

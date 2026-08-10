@@ -625,9 +625,11 @@ trait InteractsWithDockerComposeServices
 
         $compose['name'] = $project;
 
-        // Prepare the installation of the "mariadb-client" package if the MariaDB service is used...
-        if (in_array('mariadb', $services)) {
-            $compose['services']['laravel']['build']['args']['MYSQL_CLIENT'] = 'mariadb-client';
+        // Local images are built by Bake before Compose starts. Remove the legacy
+        // runtime build block when rewriting an existing Sail compose file so a
+        // direct Compose invocation cannot fall back to a nonexistent Dockerfile.
+        if (($compose['services']['laravel']['build']['context'] ?? null) === './vendor/reyemtech/sail/runtimes/8.x') {
+            unset($compose['services']['laravel']['build']);
         }
 
         // Adds the new services as dependencies of the laravel service...
