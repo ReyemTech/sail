@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.8.1](https://github.com/ReyemTech/sail/compare/v3.8.0...v3.8.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* **compose:** migrate legacy runtime builds ([cb30780](https://github.com/ReyemTech/sail/commit/cb307805cea4e7c8040669f1a34e0626c21c8b7b))
+
 ## [3.8.0](https://github.com/ReyemTech/sail/compare/v3.7.3...v3.8.0) (2026-08-10)
 
 
