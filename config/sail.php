@@ -58,5 +58,8 @@ return [
         'subnet' => env('SAIL_SUBNET', '172.20.0.0/24'),
         // Path to the per-machine host registry. Null => ~/.config/sail/registry.json.
         'registry_path' => env('SAIL_REGISTRY_PATH', null),
+        // macOS publishes .local records through a host LaunchAgent running
+        // dns-sd; Linux uses the Avahi sidecar in the project override instead.
+        'mdns_darwin_publisher' => env('SAIL_NETWORK_MDNS_DARWIN_PUBLISHER', PHP_OS_FAMILY === 'Darwin'),
     ],
 ];
