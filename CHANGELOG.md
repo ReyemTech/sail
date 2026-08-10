@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.8.2](https://github.com/ReyemTech/sail/compare/v3.8.1...v3.8.2) (2026-08-10)
+
+
+### Bug Fixes
+
+* **network:** enable darwin mdns lifecycle ([99a6443](https://github.com/ReyemTech/sail/commit/99a64438d4972cab3ded96173ee11e523e6fd9e8))
+
 ## [3.8.1](https://github.com/ReyemTech/sail/compare/v3.8.0...v3.8.1) (2026-08-10)
 
 
