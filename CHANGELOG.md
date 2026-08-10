@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.7.3](https://github.com/ReyemTech/sail/compare/v3.7.2...v3.7.3) (2026-08-10)
+
+
+### Bug Fixes
+
+* **network:** harden macos lan setup ([8ed9a5d](https://github.com/ReyemTech/sail/commit/8ed9a5d4a10e489a38d03fc7dee6d57dca589b3f))
+
 ## [3.7.2](https://github.com/ReyemTech/sail/compare/v3.7.1...v3.7.2) (2026-08-07)
 
 
