@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.8.0](https://github.com/ReyemTech/sail/compare/v3.7.3...v3.8.0) (2026-08-10)
+
+
+### Features
+
+* **network:** publish mdns on macos ([2c3e9f1](https://github.com/ReyemTech/sail/commit/2c3e9f1157adf6f6c27ff110422586b742af7f7e))
+
 ## [3.7.3](https://github.com/ReyemTech/sail/compare/v3.7.2...v3.7.3) (2026-08-10)
 
 
