@@ -31,9 +31,7 @@ class TestCase extends Orchestra
         $app['config']->set('sail.build.organization', 'testorg');
         $app['config']->set('sail.build.version', '1.0.0');
         $app['config']->set('sail.deploy.domains', 'test.local');
-        // Networking tests model Sail's supported mDNS host path independently
-        // from the developer machine running PHPUnit.
-        $app['config']->set('sail.network.mdns_supported', true);
+        $app['config']->set('sail.network.mdns_darwin_publisher', false);
         $app['config']->set('sail.secret.path', 'secret/test');
         $app['config']->set('sail.secret.store', 'vault-backend');
         $app['config']->set('mail.from.address', 'test@example.com');

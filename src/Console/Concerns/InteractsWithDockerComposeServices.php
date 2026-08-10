@@ -4,6 +4,7 @@ namespace Laravel\Sail\Console\Concerns;
 
 use Laravel\Sail\Networking\AvahiDetector;
 use Laravel\Sail\Networking\AvahiInterfaceDetector;
+use Laravel\Sail\Networking\DarwinMdnsPublisher;
 use Laravel\Sail\Networking\HostIpDetector;
 use Laravel\Sail\Networking\HostRegistry;
 use Laravel\Sail\Networking\LanEnvironment;
@@ -286,10 +287,6 @@ trait InteractsWithDockerComposeServices
         // unreliable on Android).
         $resolver = in_array($resolver, ['nip', 'mdns'], true) ? $resolver : 'nip';
 
-        if ($resolver === 'mdns' && ! $this->supportsMdns()) {
-            throw new \RuntimeException('mDNS LAN mode is not supported on macOS yet. Use --resolver=nip instead.');
-        }
-
         $project = $this->resolveProjectName();
 
         $values = (new LanEnvironment($project, $ip, $resolver, $tls))->values();
@@ -319,8 +316,9 @@ trait InteractsWithDockerComposeServices
 
         // Per-project override that disables the standalone proxy and joins the shared network.
         $overridePath = $home->overridesDir().'/'.$project.'.yml';
-        file_put_contents($overridePath, (new SharedProxyStack($ip, $home->certsDir()))->projectOverride(null, $resolver === 'mdns'));
+        file_put_contents($overridePath, (new SharedProxyStack($ip, $home->certsDir()))->projectOverride(null, $resolver === 'mdns' && ! $this->usesDarwinMdnsPublisher()));
         $values['SAIL_FILES'] = basename($this->composePath()).':'.$overridePath;
+        $this->syncDarwinMdnsPublisher($project, $values['SAIL_DOMAIN'], $ip, $resolver);
 
         // Per-project raw-TCP port offsets so services don't collide on the shared IP.
         $slot = (new HostRegistry($home->registryPath()))->slotFor($project);
@@ -388,10 +386,6 @@ trait InteractsWithDockerComposeServices
 
         $resolver = in_array($resolver, ['nip', 'mdns'], true) ? $resolver : 'nip';
 
-        if ($resolver === 'mdns' && ! $this->supportsMdns()) {
-            throw new \RuntimeException('mDNS LAN mode is not supported on macOS yet. Use --resolver=nip instead.');
-        }
-
         $scheme = $tls ? 'https' : 'http';
         $project = $this->resolveProjectName();
 
@@ -402,6 +396,8 @@ trait InteractsWithDockerComposeServices
             $values['APP_URL'] = $scheme.'://'.$domain;
             $values['VITE_DEV_SERVER_URL'] = $scheme.'://'.$domain.'/vite';
         }
+
+        $this->syncDarwinMdnsPublisher($project, $values['SAIL_DOMAIN'], $ip, $resolver);
 
         // Per-project proxy on standard ports: clear any shared-lan leftovers so a
         // switch from 'lan' → 'lan-direct' never keeps the override or profile.
@@ -417,9 +413,25 @@ trait InteractsWithDockerComposeServices
         return $values;
     }
 
-    protected function supportsMdns(): bool
+    protected function syncDarwinMdnsPublisher(string $project, string $domain, string $ip, string $resolver): void
     {
-        return (bool) config('sail.network.mdns_supported', PHP_OS_FAMILY !== 'Darwin');
+        if (! $this->usesDarwinMdnsPublisher()) {
+            return;
+        }
+
+        $publisher = $this->laravel->make(DarwinMdnsPublisher::class);
+        if ($resolver === 'mdns') {
+            $publisher->publish($project, $domain, $ip);
+
+            return;
+        }
+
+        $publisher->stop($project);
+    }
+
+    protected function usesDarwinMdnsPublisher(): bool
+    {
+        return (bool) config('sail.network.mdns_darwin_publisher', PHP_OS_FAMILY === 'Darwin');
     }
 
     /**
@@ -431,6 +443,10 @@ trait InteractsWithDockerComposeServices
     protected function warnIfMdnsUnavailable(string $resolver): void
     {
         if ($resolver !== 'mdns') {
+            return;
+        }
+
+        if ($this->usesDarwinMdnsPublisher()) {
             return;
         }
 
@@ -481,6 +497,10 @@ trait InteractsWithDockerComposeServices
     protected function warnIfMdnsHostMisrouted(string $resolver, string $bindIp): void
     {
         if ($resolver !== 'mdns') {
+            return;
+        }
+
+        if ($this->usesDarwinMdnsPublisher()) {
             return;
         }
 

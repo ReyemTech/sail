@@ -107,6 +107,7 @@ class NetworkCommand extends Command
 
             (new \Laravel\Sail\Networking\HostRegistry((new \Laravel\Sail\Networking\SailHome)->registryPath()))
                 ->release($this->resolveProjectName());
+            $this->syncDarwinMdnsPublisher($this->resolveProjectName(), '', '', 'nip');
 
             $this->components->info("Local mode restored: SAIL_BIND_IP={$bindIp}");
 
