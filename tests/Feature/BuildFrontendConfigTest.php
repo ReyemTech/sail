@@ -81,6 +81,18 @@ class BuildFrontendConfigTest extends TestCase
         }
     }
 
+    public function test_build_uses_a_php_compatible_alpine_default(): void
+    {
+        config()->set('sail.build.php_version', '8.5');
+        config()->set('sail.build.alpine_version', null);
+
+        $this->build();
+
+        $command = BuildProbeCommand::bakeCommand();
+        $this->assertStringContainsString("PHP_VERSION='8.5'", $command);
+        $this->assertStringContainsString("ALPINE_VERSION='3.24'", $command);
+    }
+
     public function test_the_auth_token_never_reaches_the_command_line(): void
     {
         $this->build(
