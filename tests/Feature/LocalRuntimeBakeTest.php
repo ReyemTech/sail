@@ -16,15 +16,17 @@ class LocalRuntimeBakeTest extends TestCase
         $this->assertStringContainsString('ALPINE_VERSION = "${ALPINE_VERSION}"', $bake);
     }
 
-    public function test_the_base_image_reads_the_ca_from_the_certificate_context(): void
+    public function test_the_base_image_optionally_reads_the_ca_from_the_certificate_context(): void
     {
         $dockerfile = file_get_contents(__DIR__.'/../../runtimes/8.x/Dockerfile.base');
 
         $this->assertNotFalse($dockerfile);
         $this->assertStringContainsString(
-            'COPY --from=certs mkcert-rootCA.pem /usr/local/share/ca-certificates/mkcert-rootCA.crt',
+            'COPY --from=certs . /tmp/sail-certs/',
             $dockerfile
         );
+        $this->assertStringContainsString('if [ -f /tmp/sail-certs/mkcert-rootCA.pem ]', $dockerfile);
+        $this->assertFileExists(__DIR__.'/../../runtimes/8.x/certs/.gitkeep');
     }
 
     public function test_the_shared_runtime_installs_opcache_only_for_php_versions_that_need_it(): void

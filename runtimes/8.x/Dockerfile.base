@@ -11,9 +11,9 @@ ARG GUID=1000
 
 ENV VERSION=${PHP_VERSION_NUM}
 
-# Copy the mkcert root CA from its dedicated build context. In shared LAN mode it
-# lives in Sail Home rather than the Composer-managed runtime directory.
-COPY --from=certs mkcert-rootCA.pem /usr/local/share/ca-certificates/mkcert-rootCA.crt
+# The shipped certs context is intentionally empty. LAN setup supplies the
+# mkcert CA from Sail Home; build-only workflows may safely have no local CA.
+COPY --from=certs . /tmp/sail-certs/
 
 # Install runtime system dependencies (Alpine packages). Alpine split OPcache
 # from PHP through 8.4; PHP 8.5 bundles it into the base package.
@@ -78,6 +78,7 @@ RUN apk add --no-cache \
     && ln -sf /usr/bin/php${VERSION} /usr/bin/php \
     && ln -sf /usr/sbin/php-fpm${VERSION} /usr/sbin/php-fpm \
     && ln -sf /etc/php${VERSION} /etc/php \
+    && if [ -f /tmp/sail-certs/mkcert-rootCA.pem ]; then cp /tmp/sail-certs/mkcert-rootCA.pem /usr/local/share/ca-certificates/mkcert-rootCA.crt; fi \
     && rm -rf /var/cache/apk/* \
     && sed -i 's/bin\/ash/bin\/bash/g' /etc/passwd \
     && update-ca-certificates \
@@ -90,7 +91,7 @@ RUN apk add --no-cache \
     && chown -R sail:sail /var \
     && chown -R sail:sail /var/www \
     && chmod -R 755 /var \
-    && rm -rf /usr/local/etc/php-fpm.d/docker.conf
+    && rm -rf /usr/local/etc/php-fpm.d/docker.conf /tmp/sail-certs
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer

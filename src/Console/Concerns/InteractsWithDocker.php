@@ -5,6 +5,7 @@ namespace Laravel\Sail\Console\Concerns;
 use Composer\InstalledVersions;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Str;
+use Laravel\Sail\Networking\SailHome;
 use MirazMac\DotEnv\Writer;
 use Symfony\Component\Process\Process;
 
@@ -161,6 +162,10 @@ trait InteractsWithDocker
             'ORG' => $this->organization,
             'REMOVE_NODE_MODULES' => $removeVendorNodeModules ? 'true' : 'false',
         ];
+
+        if (config('sail.network.mode') === 'lan') {
+            $args['CERTS_DIR'] = (new SailHome)->certsDir();
+        }
 
         if ($this->useRepository) {
             $args['REGISTRY'] = $repository;
