@@ -303,6 +303,9 @@ trait InteractsWithDocker
         }
 
         $bakeCommand .= ' docker buildx bake ';
+        if (isset($args['CERTS_DIR'])) {
+            $bakeCommand .= ' --allow=fs.read='.escapeshellarg($args['CERTS_DIR']);
+        }
         $bakeCommand .= ' -f '.realpath(InstalledVersions::getInstallPath('reyemtech/sail').'/runtimes/8.x/docker-bake.hcl');
 
         // $bakeCommand .= ' --print ';

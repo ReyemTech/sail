@@ -64,6 +64,23 @@ class BuildFrontendConfigTest extends TestCase
         $this->assertStringContainsString("SENTRY_PROJECT='gta-events-react'", $command);
     }
 
+    public function test_lan_builds_allow_reading_the_sail_home_certificate_context(): void
+    {
+        config()->set('sail.network.mode', 'lan');
+        putenv('SAIL_HOME=/tmp/sail-home-cert-context');
+
+        try {
+            $this->build();
+
+            $this->assertStringContainsString(
+                "--allow=fs.read='/tmp/sail-home-cert-context/certs'",
+                BuildProbeCommand::bakeCommand()
+            );
+        } finally {
+            putenv('SAIL_HOME');
+        }
+    }
+
     public function test_the_auth_token_never_reaches_the_command_line(): void
     {
         $this->build(
