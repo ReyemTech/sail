@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.8.4](https://github.com/ReyemTech/sail/compare/v3.8.3...v3.8.4) (2026-08-11)
+
+
+### Bug Fixes
+
+* **build:** allow lan certificate context ([07e839e](https://github.com/ReyemTech/sail/commit/07e839e71ea7363732dd66e7f354b8b85ba453a8))
+
 ## [3.8.3](https://github.com/ReyemTech/sail/compare/v3.8.2...v3.8.3) (2026-08-11)
 
 
