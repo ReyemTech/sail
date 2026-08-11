@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.8.5](https://github.com/ReyemTech/sail/compare/v3.8.4...v3.8.5) (2026-08-11)
+
+
+### Bug Fixes
+
+* **build:** resolve php version from composer ([46b9210](https://github.com/ReyemTech/sail/commit/46b9210e8e68b22cf72f9d720ab458029c1c3a12))
+
 ## [3.8.4](https://github.com/ReyemTech/sail/compare/v3.8.3...v3.8.4) (2026-08-11)
 
 
