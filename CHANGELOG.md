@@ -1,5 +1,12 @@
 # Release Notes
 
+## [3.8.3](https://github.com/ReyemTech/sail/compare/v3.8.2...v3.8.3) (2026-08-11)
+
+
+### Bug Fixes
+
+* **runtime:** allow bake without local certificates ([bf384ee](https://github.com/ReyemTech/sail/commit/bf384eeac1feea3ef380ea08e9ec66274636c790))
+
 ## [3.8.2](https://github.com/ReyemTech/sail/compare/v3.8.1...v3.8.2) (2026-08-10)
 
 
