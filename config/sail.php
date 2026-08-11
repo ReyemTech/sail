@@ -9,6 +9,8 @@ return [
         'push' => env('SAIL_BUILD_PUSH', false),
         'organization' => env('SAIL_BUILD_ORGANIZATION', 'reyemtech'),
         'version' => env('SAIL_BUILD_VERSION', "1.0.0"),
+        'php_version' => env('PHP_VERSION'),
+        'alpine_version' => env('ALPINE_VERSION'),
         'remove_node_modules' => env('SAIL_BUILD_REMOVE_NODE_MODULES',
             env('SAIL_BUILD_REMOVE_VENDOR_NODE_MODULES', true)),
 

@@ -161,7 +161,11 @@ trait InteractsWithDocker
             'RUNTIME_DIR' => realpath(InstalledVersions::getInstallPath('reyemtech/sail').'/runtimes/8.x'),
             'ORG' => $this->organization,
             'REMOVE_NODE_MODULES' => $removeVendorNodeModules ? 'true' : 'false',
+            'PHP_VERSION' => $this->resolveBuildPhpVersion(),
         ];
+
+        $args['ALPINE_VERSION'] = (string) (config('sail.build.alpine_version')
+            ?: (version_compare($args['PHP_VERSION'], '8.5', '>=') ? '3.24' : '3.21'));
 
         if (config('sail.network.mode') === 'lan') {
             $args['CERTS_DIR'] = (new SailHome)->certsDir();
@@ -188,6 +192,42 @@ trait InteractsWithDocker
         $commands[] = $this->createBakeCommand($args);
 
         return $this->runCommands($commands, $secrets);
+    }
+
+    protected function resolveBuildPhpVersion(): string
+    {
+        $configured = config('sail.build.php_version');
+        if (is_scalar($configured) && $configured !== '') {
+            return $this->majorMinorPhpVersion((string) $configured) ?? '8.4';
+        }
+
+        $composer = $this->composerPlatformVersion(base_path('composer.json'), 'config.platform.php');
+        if ($composer !== null) {
+            return $composer;
+        }
+
+        return $this->composerPlatformVersion(base_path('composer.lock'), 'platform-overrides.php') ?? '8.4';
+    }
+
+    protected function composerPlatformVersion(string $path, string $key): ?string
+    {
+        if (! is_file($path)) {
+            return null;
+        }
+
+        $data = json_decode((string) file_get_contents($path), true);
+        if (! is_array($data)) {
+            return null;
+        }
+
+        $value = data_get($data, $key);
+
+        return is_string($value) ? $this->majorMinorPhpVersion($value) : null;
+    }
+
+    protected function majorMinorPhpVersion(string $version): ?string
+    {
+        return preg_match('/^(\d+\.\d+)(?:\.\d+)?$/', $version, $matches) ? $matches[1] : null;
     }
 
     /**
