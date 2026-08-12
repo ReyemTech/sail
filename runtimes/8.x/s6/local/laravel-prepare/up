@@ -7,7 +7,12 @@ foreground { composer install --optimize-autoloader --prefer-dist }
 
 foreground { php artisan migrate --force }
 
-foreground { php artisan optimize }
+# Clear, never cache. Caching config and routes here makes a container restart
+# silently revert the app to whatever .env said at boot: edits appear to do
+# nothing, and route-registration side effects in bootstrap/app.php stop running
+# because cached routes skip the routing closure entirely.
+# The production runtime (s6/app) still runs `optimize`.
+foreground { php artisan optimize:clear }
 
 foreground { chown -R sail:sail /var/www/storage/logs }
 
