@@ -1,5 +1,13 @@
 # Release Notes
 
+## [3.8.6](https://github.com/ReyemTech/sail/compare/v3.8.5...v3.8.6) (2026-08-14)
+
+
+### Bug Fixes
+
+* **runtime:** clear caches on local boot instead of building them ([1c2a2bd](https://github.com/ReyemTech/sail/commit/1c2a2bdaa21ced1734ee7cbd8c437ffd083e9010))
+* **runtime:** clear caches on local boot instead of building them ([2298067](https://github.com/ReyemTech/sail/commit/22980676eb7ed8a604bdcff6a0f465fba705734c))
+
 ## [3.8.5](https://github.com/ReyemTech/sail/compare/v3.8.4...v3.8.5) (2026-08-11)
 
 
