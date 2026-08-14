@@ -48,4 +48,24 @@ class LocalRuntimeBakeTest extends TestCase
         $this->assertStringContainsString('"PHP_VERSION=$PHP_VERSION"', $sail);
         $this->assertStringContainsString('exit "$BAKE_EXIT"', $sail);
     }
+
+    public function test_the_local_runtime_clears_caches_on_boot_rather_than_building_them(): void
+    {
+        // Caching config and routes in a development container makes a restart
+        // silently revert the app to whatever .env held at boot, and cached
+        // routes skip the routing closure in bootstrap/app.php altogether.
+        $prepare = file_get_contents(__DIR__.'/../../runtimes/8.x/s6/local/laravel-prepare/up');
+
+        $this->assertNotFalse($prepare);
+        $this->assertStringContainsString('php artisan optimize:clear', $prepare);
+        $this->assertDoesNotMatchRegularExpression('/artisan optimize\s*}/', $prepare);
+    }
+
+    public function test_the_production_runtime_still_builds_its_caches(): void
+    {
+        $prepare = file_get_contents(__DIR__.'/../../runtimes/8.x/s6/app/laravel-prepare/up');
+
+        $this->assertNotFalse($prepare);
+        $this->assertMatchesRegularExpression('/artisan optimize\s*}/', $prepare);
+    }
 }
