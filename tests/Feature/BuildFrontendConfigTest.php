@@ -93,6 +93,16 @@ class BuildFrontendConfigTest extends TestCase
         $this->assertStringContainsString("ALPINE_VERSION='3.24'", $command);
     }
 
+    public function test_php_84_builds_use_the_supported_alpine_community_branch(): void
+    {
+        config()->set('sail.build.php_version', '8.4');
+        config()->set('sail.build.alpine_version', null);
+
+        $this->build();
+
+        $this->assertStringContainsString("ALPINE_VERSION='3.24'", BuildProbeCommand::bakeCommand());
+    }
+
     public function test_the_auth_token_never_reaches_the_command_line(): void
     {
         $this->build(

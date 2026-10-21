@@ -165,7 +165,7 @@ trait InteractsWithDocker
         ];
 
         $args['ALPINE_VERSION'] = (string) (config('sail.build.alpine_version')
-            ?: (version_compare($args['PHP_VERSION'], '8.5', '>=') ? '3.24' : '3.21'));
+            ?: (version_compare($args['PHP_VERSION'], '8.3', '>=') ? '3.24' : '3.21'));
 
         if (config('sail.network.mode') === 'lan') {
             $args['CERTS_DIR'] = (new SailHome)->certsDir();

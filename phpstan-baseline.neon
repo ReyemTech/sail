@@ -53,3 +53,5 @@ parameters:
 			identifier: arguments.count
 			count: 1
 			path: src/Redis/PhpRedisSentinelConnector.php
+			# The positional-only signature depends on the installed Redis stubs.
+			reportUnmatched: false

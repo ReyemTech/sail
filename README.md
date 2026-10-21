@@ -30,6 +30,50 @@ It is a **drop-in replacement** for `laravel/sail` — it uses the same `Laravel
 
 > **Relationship to upstream:** this fork periodically merges `laravel/sail` so the local-dev experience stays current. Everything in the [Laravel Sail documentation](https://laravel.com/docs/sail) applies here too; this README focuses on what the fork adds on top.
 
+## PHP security update — October 21, 2026
+
+PHP has released fixes for **CVE-2026-109618** and **CVE-2026-109619**.
+The minimum upstream versions are **8.2.35**, **8.3.36**, **8.4.27**, and
+**8.5.12**. See the [PHP security advisory](https://www.php.net/archive/2026.php#2026-10-21-5).
+
+Sail installs PHP from Alpine packages; changing Composer dependencies does not
+update the interpreter inside an existing image. The base Bake targets now pull
+Alpine and reinstall packages on every build, then reject PHP versions below
+these minimums. Unsupported branches, prereleases, and unverified vendor
+backports are rejected too. Base builds take longer because their cache is
+disabled; application stages retain their normal cache behavior.
+
+The default Alpine release is now **3.24** (also used by `sail:build` for PHP
+8.3–8.5), whose community repository receives updates. PHP 8.2 is not packaged
+there: migrate to PHP 8.3–8.5 or separately verify a vendor-provided fix.
+Explicit `ALPINE_VERSION` overrides are retained, but must supply fixed PHP
+packages. A build failure while mirrors still have old PHP is intentional:
+retry once the selected repository publishes the fixed packages.
+
+After updating Sail in each consuming application:
+
+1. Rebuild local images explicitly; `sail up` skips building when the image already
+   exists. From the application root, run:
+
+   ```bash
+   RUNTIME_DIR=./vendor/reyemtech/sail/runtimes/8.x \
+     docker buildx bake -f vendor/reyemtech/sail/runtimes/8.x/docker-bake.hcl app
+   ```
+
+   Supply the same `ORG`, `APP_NAME`, `VERSION`, `PHP_VERSION`, `ALPINE_VERSION`,
+   and `CERTS_DIR` overrides as your application normally uses so the image tag
+   matches Compose. Then recreate the application container and verify `php -v`
+   and `php-fpm -v` inside it.
+2. Rebuild and publish production web and worker images with the application's
+   normal `sail:build` pipeline and a new immutable version tag. Redeploy every
+   web, worker, scheduler, and job workload using those images.
+3. Verify PHP in each running workload and separately update host PHP, CI PHP,
+   and applications using published/custom runtimes. Previously published
+   Dockerfiles must be refreshed or updated separately.
+
+Updating this package alone does **not** patch running containers. Do not treat
+an image as remediated until its installed PHP version has been checked.
+
 ## Quickstart
 
 From an empty `composer require` to a production image and Helm chart in four steps.
