@@ -1,5 +1,16 @@
 # Release Notes
 
+## [3.8.6](https://github.com/ReyemTech/sail/compare/v3.8.5...v3.8.6) (2026-10-21)
+
+
+### Bug Fixes
+
+* **ci:** tolerate Redis stub differences in PHPStan baseline ([cb832a2](https://github.com/ReyemTech/sail/commit/cb832a2c15724d099bc68b6cc5e4401c24f3c0fb))
+* **runtime:** clear caches on local boot instead of building them ([1c2a2bd](https://github.com/ReyemTech/sail/commit/1c2a2bdaa21ced1734ee7cbd8c437ffd083e9010))
+* **runtime:** clear caches on local boot instead of building them ([2298067](https://github.com/ReyemTech/sail/commit/22980676eb7ed8a604bdcff6a0f465fba705734c))
+* **security:** reject PHP runtimes vulnerable to PHP2Shell ([d266c93](https://github.com/ReyemTech/sail/commit/d266c93fbb958122ecb6320d13a3daf948c1936f))
+* **security:** reject PHP runtimes vulnerable to PHP2Shell ([fc3cb73](https://github.com/ReyemTech/sail/commit/fc3cb73fbb3fb16b42bfa3fb8c71c642f77d8be0))
+
 ## [3.8.5](https://github.com/ReyemTech/sail/compare/v3.8.4...v3.8.5) (2026-08-11)
 
 
