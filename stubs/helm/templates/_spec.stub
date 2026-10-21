@@ -63,7 +63,7 @@ spec:
           {{- $tierProbes := .probes | default dict }}
           {{- $globalProbes := .main.global.probes | default dict }}
           {{- $readinessProbe := merge ($globalProbes.readinessProbe | default dict) ($tierProbes.readinessProbe | default dict) }}
-          {{- $livenessProbe := merge ($globalProbes.livenessProbe | default dict) ($tierProbes.livenessProbe | default dict) }}
+          {{- $livenessProbe := mergeOverwrite (deepCopy ($tierProbes.livenessProbe | default dict)) ($globalProbes.livenessProbe | default dict) }}
           {{- $startupProbe := merge ($globalProbes.startupProbe | default dict) ($tierProbes.startupProbe | default dict) }}
           {{- $hasReadinessConfig := or $readinessProbe.httpGet $readinessProbe.exec $readinessProbe.tcpSocket }}
           {{- $readinessEnabled := and $hasReadinessConfig (or (not (hasKey $readinessProbe "enabled")) $readinessProbe.enabled) }}
@@ -95,7 +95,8 @@ spec:
             failureThreshold: {{ $readinessProbe.failureThreshold }}
             {{- end }}
           {{- end }}
-          {{- $hasLivenessConfig := or $livenessProbe.httpGet $livenessProbe.exec $livenessProbe.tcpSocket }}
+          {{- $localWorkerLiveness := and (eq .tier "worker") ($livenessProbe.localProcess | default false) }}
+          {{- $hasLivenessConfig := or $livenessProbe.httpGet $livenessProbe.exec $livenessProbe.tcpSocket $localWorkerLiveness }}
           {{- $livenessEnabled := and $hasLivenessConfig (or (not (hasKey $livenessProbe "enabled")) $livenessProbe.enabled) }}
           {{- if $livenessEnabled }}
           livenessProbe:
@@ -108,6 +109,13 @@ spec:
             {{- else if $livenessProbe.tcpSocket }}
             tcpSocket:
               {{- toYaml $livenessProbe.tcpSocket | nindent 14 }}
+            {{- else if $localWorkerLiveness }}
+            exec:
+              command:
+                - sh
+                - -c
+                {{- $workerCommand := ternary "horizon" "queue:work" (.horizon | default false) }}
+                - {{ printf "exec pgrep -f '^([^ ]*/)?php[0-9.]* ([^ ]*/)?artisan %s([[:space:]]|$)' >/dev/null" $workerCommand | quote }}
             {{- end }}
             {{- if $livenessProbe.initialDelaySeconds }}
             initialDelaySeconds: {{ $livenessProbe.initialDelaySeconds }}

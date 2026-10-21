@@ -65,6 +65,87 @@ class HelmTemplateTest extends TestCase
         return $p->getOutput();
     }
 
+    public function test_worker_liveness_checks_local_master_without_bootstrapping_laravel(): void
+    {
+        $worker = $this->renderWorkerContainer();
+        $this->assertSame(['php', 'artisan', 'horizon:status'], $worker['readinessProbe']['exec']['command']);
+        $command = $worker['livenessProbe']['exec']['command'];
+        $this->assertSame(['sh', '-c'], array_slice($command, 0, 2));
+        $this->assertWorkerProbeStatus($command, null, false);
+        $this->assertWorkerProbeStatus($command, 'horizon:work', false);
+        $this->assertWorkerProbeStatus($command, 'horizon:status', false);
+        $this->assertWorkerProbeStatus($command, 'queue:work', false);
+        $this->assertWorkerProbeStatus($command, 'horizon', true);
+        File::link(PHP_BINARY, $this->tmpValuesDir.'/php84');
+        $this->assertWorkerProbeStatus($command, 'horizon', true, $this->tmpValuesDir.'/php84');
+    }
+
+    public function test_non_horizon_worker_liveness_checks_queue_worker(): void
+    {
+        $worker = $this->renderWorkerContainer(['worker' => ['horizon' => false]]);
+        $command = $worker['livenessProbe']['exec']['command'];
+        $this->assertSame(['sh', '-c'], array_slice($command, 0, 2));
+        $this->assertWorkerProbeStatus($command, null, false);
+        $this->assertWorkerProbeStatus($command, 'horizon', false);
+        $this->assertWorkerProbeStatus($command, 'queue:work', true);
+    }
+
+    public function test_explicit_worker_liveness_commands_are_preserved(): void
+    {
+        foreach (['worker', 'global'] as $scope) {
+            $worker = $this->renderWorkerContainer([
+                $scope => ['probes' => ['livenessProbe' => ['exec' => ['command' => ['custom-health', '--local']]]]],
+            ]);
+            $this->assertSame(['custom-health', '--local'], $worker['livenessProbe']['exec']['command']);
+        }
+        foreach (['httpGet' => ['path' => '/health', 'port' => 80], 'tcpSocket' => ['port' => 9000]] as $handler => $config) {
+            $worker = $this->renderWorkerContainer([
+                'worker' => ['probes' => ['livenessProbe' => [$handler => $config]]],
+            ]);
+            $this->assertSame($config, $worker['livenessProbe'][$handler]);
+            $this->assertArrayNotHasKey('exec', $worker['livenessProbe']);
+        }
+        foreach (['worker', 'global'] as $scope) {
+            foreach (['enabled', 'localProcess'] as $flag) {
+                $worker = $this->renderWorkerContainer([
+                    $scope => ['probes' => ['livenessProbe' => [$flag => false]]],
+                ]);
+                $this->assertArrayNotHasKey('livenessProbe', $worker, $scope.'.'.$flag.' must disable liveness');
+            }
+        }
+    }
+
+    private function renderWorkerContainer(array $overrides = []): array
+    {
+        foreach (preg_split('/^---\s*\n/m', $this->renderChart($overrides)) as $document) {
+            if (preg_match('/^  name: testapp-worker$/m', $document)
+                && preg_match('/^      containers:\n(.*)$/ms', $document, $matches)) {
+                // Parse the actual container YAML; chart metadata has a pre-existing
+                // duplicate label key, unrelated to these probe contracts.
+                return \Symfony\Component\Yaml\Yaml::parse("containers:\n".$matches[1])['containers'][0];
+            }
+        }
+        $this->fail('Worker deployment container was not rendered.');
+    }
+
+    private function assertWorkerProbeStatus(array $command, ?string $artisanCommand, bool $healthy, ?string $php = null): void
+    {
+        $fixture = null;
+        if ($artisanCommand !== null) {
+            File::put($this->tmpValuesDir.'/artisan', '<?php fwrite(STDOUT, "ready"); while (true) { usleep(100000); }');
+            $fixture = new Process([$php ?? PHP_BINARY, $this->tmpValuesDir.'/artisan', $artisanCommand]);
+            $fixture->start();
+            $fixture->waitUntil(fn ($type, $output) => str_contains($output, 'ready'));
+        }
+        try {
+            $probe = new Process($command, $this->tmpValuesDir);
+            $probe->run();
+            $this->assertSame($healthy, $probe->isSuccessful(), 'Unexpected probe result with '.($artisanCommand ?? 'no worker').': '.$probe->getErrorOutput());
+        } finally {
+            $fixture?->stop();
+        }
+    }
+
     public function test_chart_renders_without_error(): void
     {
         $out = $this->renderChart();
