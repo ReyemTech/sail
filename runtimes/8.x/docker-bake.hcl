@@ -15,7 +15,7 @@ variable "PHP_VERSION" {
 }
 
 variable "ALPINE_VERSION" {
-    default = "3.21"
+    default = "3.24"
 }
 
 variable "PUSH" {
@@ -71,6 +71,10 @@ group "default" {
 
 target "base" {
     name = "base-${tgt}"
+    # APK indexes changing does not invalidate Docker's RUN cache. Always fetch
+    # current packages and check the installed PHP before building any image.
+    no-cache = true
+    pull = true
     context = "${RUNTIME_DIR}"
     contexts = {
         "runtime" = "${RUNTIME_DIR}"
