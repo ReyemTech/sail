@@ -150,11 +150,10 @@ worker:
       failureThreshold: 3
     livenessProbe:
       enabled: true
-      exec:
-        command:
-          - php
-          - artisan
-          - horizon:status
+      # Check the local Horizon master (or queue:work when horizon: false).
+      # Redis outages affect readiness, without restarting a healthy worker.
+      # An explicit exec, httpGet, or tcpSocket probe overrides this default.
+      localProcess: true
       initialDelaySeconds: 60  # Give workers more time before checking liveness
       periodSeconds: 60        # Less frequent than readiness
       timeoutSeconds: 10

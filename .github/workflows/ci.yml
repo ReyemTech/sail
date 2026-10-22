@@ -37,3 +37,7 @@ jobs:
       - name: Run PHPStan
         if: matrix.php == '8.4'
         run: vendor/bin/phpstan analyse src --memory-limit=512M
+
+      - name: Verify Nginx build asset responses
+        if: matrix.php == '8.4'
+        run: python3 tests/Integration/nginx-build-assets/test_nginx.py

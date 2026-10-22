@@ -144,16 +144,85 @@ class PhpRedisSentinelResilienceTest extends TestCase
         $this->assertSame(5, $connector->connectCalls); // 1 initial + 4 backoff retries
     }
 
-    public function test_does_not_retry_non_dns_failures(): void
+    public function test_retries_loading_refusals_and_connect_read_errors_with_bounded_backoff(): void
+    {
+        foreach ([
+            new RedisException('LOADING Redis is loading the dataset in memory'),
+            new \ErrorException('Redis::auth(): LOADING Redis is loading the dataset in memory'),
+            new RedisException('Connection refused'),
+            new \ErrorException('Redis::connect(): read error on connection to redis:6379'),
+        ] as $failure) {
+            $connector = new SentinelConnectRetryProbe;
+            $connector->connectFailures = [$failure, $failure];
+            $connection = Mockery::mock(PhpRedisConnection::class);
+            $connector->successfulConnection = $connection;
+
+            $this->assertSame($connection, $connector->connect(['connect_retry_backoff_ms' => [5, 10]], []));
+            $this->assertSame(3, $connector->connectCalls);
+            $this->assertSame([5, 10], $connector->sleeps);
+        }
+    }
+
+    public function test_stops_retrying_when_a_loading_failure_changes_to_auth_failure(): void
     {
         $connector = new SentinelConnectRetryProbe;
-        $connector->connectFailures = [new RedisException('Connection refused')];
+        $authFailure = new RedisException('WRONGPASS invalid username-password pair');
+        $connector->connectFailures = [new RedisException('LOADING Redis is loading the dataset in memory'), $authFailure];
+
+        try {
+            $connector->connect(['connect_retry_backoff_ms' => [0, 0, 0]], []);
+            $this->fail('Expected authentication failure.');
+        } catch (RedisException $exception) {
+            $this->assertSame($authFailure, $exception);
+        }
+        $this->assertSame(2, $connector->connectCalls);
+    }
+
+    public function test_persistent_loading_throws_the_final_failure_at_the_retry_limit(): void
+    {
+        $connector = new SentinelConnectRetryProbe;
+        $last = new RedisException('LOADING final failure');
+        $connector->connectFailures = [new RedisException('LOADING first failure'), $last];
+
+        try {
+            $connector->connect(['connect_retry_backoff_ms' => [25]], []);
+            $this->fail('Expected final LOADING failure.');
+        } catch (RedisException $exception) {
+            $this->assertSame($last, $exception);
+        }
+        $this->assertSame(2, $connector->connectCalls);
+        $this->assertSame([25], $connector->sleeps);
+    }
+
+    public function test_does_not_retry_unrelated_errors_that_mention_loading_or_connection_words(): void
+    {
+        foreach ([
+            new RedisException('WRONGPASS credentials while loading configuration'),
+            new RedisException('ERR script failed while LOADING data'),
+            new \LogicException('Connection refused by application configuration'),
+        ] as $failure) {
+            $connector = new SentinelConnectRetryProbe;
+            $connector->connectFailures = [$failure];
+            try {
+                $connector->connect(['connect_retry_backoff_ms' => [0, 0]], []);
+                $this->fail('Unrelated errors must not be retried.');
+            } catch (Throwable $exception) {
+                $this->assertSame($failure, $exception);
+            }
+            $this->assertSame(1, $connector->connectCalls);
+        }
+    }
+
+    public function test_does_not_retry_authentication_failures(): void
+    {
+        $connector = new SentinelConnectRetryProbe;
+        $connector->connectFailures = [new RedisException('WRONGPASS invalid username-password pair')];
 
         try {
             $connector->connect(['connect_retry_backoff_ms' => [0, 0, 0, 0]], []);
-            $this->fail('Expected the connector to re-throw a non-DNS failure immediately.');
+            $this->fail('Expected authentication failure to be re-thrown immediately.');
         } catch (RedisException $e) {
-            $this->assertStringContainsString('Connection refused', $e->getMessage());
+            $this->assertStringContainsString('WRONGPASS', $e->getMessage());
         }
 
         $this->assertSame(1, $connector->connectCalls);
@@ -202,6 +271,8 @@ class SentinelConnectRetryProbe extends PhpRedisSentinelConnector
 
     public int $connectCalls = 0;
 
+    public array $sleeps = [];
+
     public ?PhpRedisConnection $successfulConnection = null;
 
     protected function establishSentinelConnection(array $config, array $options): PhpRedisConnection
@@ -217,6 +288,6 @@ class SentinelConnectRetryProbe extends PhpRedisSentinelConnector
 
     protected function sleepBeforeConnectRetry(int $milliseconds): void
     {
-        // No waiting in tests.
+        $this->sleeps[] = $milliseconds;
     }
 }

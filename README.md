@@ -461,10 +461,46 @@ helm rollback <release> <revision>
 
 The fork ships a Sentinel-aware phpredis client (`src/Redis/`) that discovers the current master through Sentinel and retries reconnects with backoff. Wire it up through the Helm chart's Redis Sentinel env vars, or use the connector directly in your Redis config.
 
+Sail's automatically discovered Redis provider applies bounded connection-setup
+retries to both `phpredis` and `phpredis-sentinel`. It retries transient DNS
+failures, connection refusals, connect-time read errors, and Redis `LOADING`
+responses during setup. Authentication and unrelated errors fail immediately.
+The default four delays are **100, 250, 500, and 1000 ms** (1.85 seconds total,
+plus connection timeouts). Override `connect_retry_backoff_ms` on each Redis
+connection in `config/database.php` for longer dataset restore windows:
+
+```php
+'connect_retry_backoff_ms' => [100, 250, 500, 1000, 2000, 4000],
+```
+
+Exhausted retries surface the final error. This policy only retries initial
+connection setup; it does not add application-command replay or cover clustered
+Redis connections. Existing Sentinel failover command retries are unchanged.
+Applications with custom Redis driver registrations must remove or reconcile
+those overrides to use Sail's connectors.
+
+### Worker health
+
+Generated worker charts use a local process check for liveness: the Horizon
+master when `worker.horizon: true`, or `queue:work` otherwise. The default check
+does not bootstrap Laravel or contact Redis. Horizon readiness still uses
+`php artisan horizon:status`, so a Redis outage can make a worker unready without
+causing a liveness restart. Non-Horizon deployments should configure readiness
+for their own worker, since `horizon:status` is Horizon-specific.
+
+An explicit `exec`, `httpGet`, or `tcpSocket` liveness probe overrides the local
+check. Set `worker.probes.livenessProbe.enabled: false` to disable liveness.
+Regenerate and redeploy consuming charts to adopt these defaults; existing
+explicit probe overrides remain in effect.
+
 ## Docker runtimes
 
 - PHP runtimes live in `runtimes/8.x` as a single Docker Bake file, parameterized via `PHP_VERSION` (default `8.4`). One runtime covers every supported 8.x release; there is no per-version directory.
 - Multi-stage targets: `base`, `app`, and `production` (cli/fpm).
+- Missing `.js`, `.mjs`, and `.css` files under `/build/` return empty **404**
+  responses with the correct content type and `Cache-Control: no-store`.
+  Existing build assets retain their immutable cache policy. Rebuild images to
+  adopt the Nginx change; ordinary application routes still use Laravel.
 
 ## CI/CD generation
 

@@ -5,7 +5,6 @@ namespace Laravel\Sail\Redis;
 use Illuminate\Redis\Connections\PhpRedisConnection;
 use Illuminate\Redis\Connectors\PhpRedisConnector;
 use Illuminate\Support\Arr;
-use RedisException;
 use RedisSentinel;
 use Throwable;
 
@@ -25,7 +24,7 @@ use Throwable;
  * Optional:
  *   - sentinel_port:              Sentinel port (default 26379)
  *   - connect_retry_backoff_ms:   list<int> of delays (ms) before each connect
- *                                 retry on a transient DNS failure. Defaults to
+ *                                 retry on a transient connection failure. Defaults to
  *                                 [100, 250, 500, 1000] (≤ 4 retries, 5 attempts).
  *
  * Resilience: in Kubernetes the sentinel-returned master is sometimes a headless
@@ -33,7 +32,7 @@ use Throwable;
  * returns EAI_AGAIN ("Try again"). Two behaviors guard against that transient
  * window, both backward compatible (when DNS is healthy the first attempt
  * succeeds and the resolved master is used, exactly as before):
- *   1. connect() retries on transient DNS failures with bounded backoff.
+ *   1. connect() retries DNS, refusal, setup read errors, and LOADING with bounded backoff.
  *   2. resolveMasterFromSentinel() falls back to the configured host/port when
  *      the sentinel-returned host is not resolvable from this process.
  *
@@ -44,47 +43,17 @@ use Throwable;
  */
 class PhpRedisSentinelConnector extends PhpRedisConnector
 {
-    /**
-     * Default delays (ms) before each connect retry after a transient DNS failure.
-     *
-     * @var list<int>
-     */
-    private const DEFAULT_CONNECT_RETRY_BACKOFF_MILLISECONDS = [100, 250, 500, 1000];
+    use RetriesRedisConnections;
 
     /**
-     * Establish a Sentinel-aware connection, retrying transient DNS failures with
-     * bounded backoff. Non-transient failures (config/auth/refused, and any
-     * RedisException that is not a transient-DNS error) re-throw immediately.
+     * Establish a Sentinel-aware connection with bounded setup retries.
      */
     public function connect(array $config, array $options): PhpRedisConnection
     {
-        $backoff = $this->connectRetryBackoffMilliseconds($config);
-        $attempts = max(1, count($backoff) + 1);
-        $lastException = null;
-
-        for ($attempt = 0; $attempt < $attempts; $attempt++) {
-            try {
-                return $this->establishSentinelConnection($config, $options);
-            } catch (RedisException $exception) {
-                $lastException = $exception;
-            } catch (Throwable $exception) {
-                // A non-RedisException that isn't a transient DNS error is a real
-                // failure — surface it now rather than masking it behind retries.
-                if (! $this->isTransientDnsFailure($exception)) {
-                    throw $exception;
-                }
-
-                $lastException = $exception;
-            }
-
-            if (! $this->isTransientDnsFailure($lastException) || $attempt === $attempts - 1) {
-                throw $lastException;
-            }
-
-            $this->sleepBeforeConnectRetry($backoff[$attempt]);
-        }
-
-        throw $lastException;
+        return $this->retryRedisConnection(
+            fn (): PhpRedisConnection => $this->establishSentinelConnection($config, $options),
+            $config
+        );
     }
 
     /**
@@ -215,37 +184,6 @@ class PhpRedisSentinelConnector extends PhpRedisConnector
     }
 
     /**
-     * Whether an exception is a transient DNS resolution failure that is safe to
-     * retry. There is no typed exception for this, so detection is string-matching
-     * on the message — centralized here so it's easy to extend. Matches getaddrinfo
-     * / php_network_getaddresses failures whose cause is transient (EAI_AGAIN and
-     * friends), NOT permanent errors like "Connection refused".
-     */
-    protected function isTransientDnsFailure(Throwable $exception): bool
-    {
-        $message = strtolower($exception->getMessage());
-
-        if (! str_contains($message, 'getaddrinfo') && ! str_contains($message, 'php_network_getaddresses')) {
-            return false;
-        }
-
-        return str_contains($message, 'try again')
-            || str_contains($message, 'name or service not known')
-            || str_contains($message, 'name does not resolve')
-            || str_contains($message, 'temporary failure');
-    }
-
-    /**
-     * Sleep before the next connect retry. Overridable so tests don't actually wait.
-     */
-    protected function sleepBeforeConnectRetry(int $milliseconds): void
-    {
-        if ($milliseconds > 0) {
-            usleep($milliseconds * 1000);
-        }
-    }
-
-    /**
      * Factory for the RedisSentinel client. Override in tests to inject a fake.
      */
     protected function createSentinel(array $config): RedisSentinel
@@ -256,35 +194,6 @@ class PhpRedisSentinelConnector extends PhpRedisConnector
             'connectTimeout' => 1.5,
             'auth' => $config['password'] ?? null,
         ]);
-    }
-
-    /**
-     * The connect-retry backoff schedule from `connect_retry_backoff_ms`, or the
-     * default. Non-numeric / negative entries are dropped; an empty result falls
-     * back to the default so retries are never accidentally disabled by bad config.
-     *
-     * @param  array<string, mixed>  $config
-     * @return list<int>
-     */
-    private function connectRetryBackoffMilliseconds(array $config): array
-    {
-        $configured = $config['connect_retry_backoff_ms'] ?? null;
-
-        if (! is_array($configured) || $configured === []) {
-            return self::DEFAULT_CONNECT_RETRY_BACKOFF_MILLISECONDS;
-        }
-
-        $backoff = [];
-
-        foreach ($configured as $delay) {
-            if (is_numeric($delay) && (int) $delay >= 0) {
-                $backoff[] = (int) $delay;
-            }
-        }
-
-        return $backoff === []
-            ? self::DEFAULT_CONNECT_RETRY_BACKOFF_MILLISECONDS
-            : $backoff;
     }
 
     /**
