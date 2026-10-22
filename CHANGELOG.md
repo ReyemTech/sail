@@ -1,5 +1,15 @@
 # Release Notes
 
+## [3.8.7](https://github.com/ReyemTech/sail/compare/v3.8.6...v3.8.7) (2026-10-22)
+
+
+### Bug Fixes
+
+* harden Redis setup, worker liveness, and build asset errors ([eabe75b](https://github.com/ReyemTech/sail/commit/eabe75b91501d3bf9d0c8ca350747ae875555b22))
+* **helm:** keep worker liveness independent of Redis ([c11b2bb](https://github.com/ReyemTech/sail/commit/c11b2bb59e4bc4581ef5eda650892bd8bd573e7b))
+* **redis:** retry transient connection setup failures ([196de57](https://github.com/ReyemTech/sail/commit/196de57407017568bb2dd37846fd1a540246348f))
+* **runtime:** return empty typed errors for missing build assets ([e24a0cc](https://github.com/ReyemTech/sail/commit/e24a0cc5c925e67c186e1ced40541910b017ec71))
+
 ## [3.8.6](https://github.com/ReyemTech/sail/compare/v3.8.5...v3.8.6) (2026-10-21)
 
 
